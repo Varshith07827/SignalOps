@@ -1,0 +1,34 @@
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Generated synthetic data and runtime state (recreate with `python -m src.pipeline`)
+data/generated/*
+!data/generated/.gitkeep
+data/state/*
+!data/state/.gitkeep
+artifacts/*
+!artifacts/.gitkeep
+*.duckdb
+*.duckdb.wal
+
+# Secrets / local config
+.env
+.env.*
+.streamlit/secrets.toml
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.tmp
+*.log
