@@ -132,7 +132,7 @@ def brief_to_csv(brief: dict) -> str:
     } for i, t in enumerate(brief["top_issues"])]
     buf = io.StringIO()
     pd.DataFrame(rows).to_csv(buf, index=False)
-    return buf.getvalue()
+    return "\ufeff" + buf.getvalue()  # BOM so Excel on Windows detects UTF-8
 
 
 def render_brief_html(brief: dict) -> str:

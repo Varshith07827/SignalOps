@@ -21,6 +21,7 @@ Run ``python -m src.data_generator`` to (re)create the dataset.
 from __future__ import annotations
 
 import argparse
+import sys
 import hashlib
 import json
 import random
@@ -412,7 +413,10 @@ def generate_dataset(settings: config.GeneratorSettings = config.GENERATOR
             first_template = first_template or template
             if r > 0 and rnd.random() > 0.85:
                 item, loc = rnd.choice(spec["items"]), rnd.choice(spec["locs"])
-            ts = t0 if r == 0 else min(t0 + pd.Timedelta(hours=min(rnd.expovariate(1 / 4.0), 30)), end_ts)
+            offset = pd.Timedelta(hours=min(rnd.expovariate(1 / 4.0), 30))
+            if t0 + offset > end_ts:  # keep follow-up reports inside the period without piling up at the end
+                offset = (end_ts - t0) * rnd.random()
+            ts = t0 if r == 0 else (t0 + offset).floor("min")
             text, _ = renderer.render(template, channel, store, item, loc)
             records.append(_record(ts, store, channel, text, category, template, incident_id,
                                    rnd, planted=None))
@@ -624,6 +628,8 @@ def dataset_exists() -> bool:
 
 
 def main(argv=None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):  # legacy Windows consoles: never crash on unusual characters
+        sys.stdout.reconfigure(errors="replace")
     parser = argparse.ArgumentParser(description="Generate the StorePulse synthetic dataset.")
     parser.add_argument("--records", type=int, default=config.GENERATOR.n_records)
     parser.add_argument("--seed", type=int, default=config.GENERATOR.seed)

@@ -41,6 +41,14 @@ def test_hygiene_and_misconduct_policy_levels():
     assert assess("slipped on oil and hurt my back", "physical_safety_hazard")["policy_severity"] == "Critical"
 
 
+def test_gluten_free_range_request_is_not_an_allergen_escalation(classifier):
+    text = "Why doesn't this store carry gluten-free bread? Other branches have it."
+    pred = classifier.predict_frame([text]).iloc[0]
+    r = assess(text, pred["pred_category"], pred["decision"])
+    assert pred["candidate_category"] != "allergen_labelling"
+    assert not r["mandatory_escalation"]
+
+
 def test_non_policy_issue_not_escalated():
     r = assess("queue was 30 minutes long", "queue_management")
     assert r["policy_severity"] == "Low" and not r["mandatory_escalation"]
@@ -86,3 +94,4 @@ def test_single_report_creates_p1_case_regardless_of_volume():
     assert case["tier"] == 1 and case["severity"] == "Critical"
     assert json.loads(case["evidence_ids"]) == ["F1"]
     assert "regardless of volume" in case["explanation"]
+    assert "P3" not in case["explanation"] and "P2" not in case["explanation"]

@@ -29,6 +29,7 @@ LIST_COLUMNS = ("entities", "evidence_ids")
 def connect(path: Path, read_only: bool = False):
     path.parent.mkdir(parents=True, exist_ok=True)
     con = duckdb.connect(str(path), read_only=read_only)
+    con.execute("SET enable_progress_bar = false")
     try:
         yield con
     finally:
@@ -43,6 +44,12 @@ def _to_storable(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def _fetch_df(result) -> pd.DataFrame:
+    """Fetch a query result via Arrow (much faster than the direct pandas path)."""
+    fetch = getattr(result, "to_arrow_table", None) or getattr(result, "fetch_arrow_table", None)
+    return fetch().to_pandas() if fetch else result.df()
+
+
 def write_tables(tables: dict[str, pd.DataFrame], path: Path = config.ANALYTICS_DB_PATH) -> None:
     with connect(path) as con:
         for name, df in tables.items():
@@ -54,12 +61,12 @@ def write_tables(tables: dict[str, pd.DataFrame], path: Path = config.ANALYTICS_
 
 def read_table(name: str, path: Path = config.ANALYTICS_DB_PATH) -> pd.DataFrame:
     with connect(path, read_only=True) as con:
-        return con.execute(f'SELECT * FROM "{name}"').df()
+        return _fetch_df(con.execute(f'SELECT * FROM "{name}"'))
 
 
 def query(sql: str, params=None, path: Path = config.ANALYTICS_DB_PATH) -> pd.DataFrame:
     with connect(path, read_only=True) as con:
-        return con.execute(sql, params or []).df()
+        return _fetch_df(con.execute(sql, params or []))
 
 
 def table_exists(name: str, path: Path = config.ANALYTICS_DB_PATH) -> bool:

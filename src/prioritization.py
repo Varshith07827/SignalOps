@@ -225,11 +225,11 @@ def _explain(tier, severity, rules, comp, score, settings, sig, n_reports, trend
         parts.append(f"Tier P2: policy {', '.join(rules)} requires review of {severity} reports.")
     elif tier == 2:
         parts.append(f"Tier P2: emerging trend with {severity} severity.")
+    else:
+        parts.append("Tier P3: emerging trend.")
     if trend_escalated:
         parts.append(f"Severity raised one level to {severity} by the trend-escalation rule (confirmed "
                      f"emerging trend, q <= {TREND_ESCALATION['max_q_value']}).")
-    else:
-        parts.append("Tier P3: emerging trend.")
     if sig:
         parts.append(f"Trend evidence: {sig.get('window_count')} incidents vs {sig.get('expected_count'):.2f} "
                      f"expected over {sig.get('evidence_window_days')} days (q={sig.get('q_value'):.2g}).")

@@ -20,6 +20,7 @@ Leakage controls
 from __future__ import annotations
 
 import argparse
+import sys
 import itertools
 import json
 from datetime import datetime
@@ -485,6 +486,8 @@ def print_report(r: dict) -> None:
 
 
 def main(argv=None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):  # legacy Windows consoles: never crash on unusual characters
+        sys.stdout.reconfigure(errors="replace")
     parser = argparse.ArgumentParser(description="Evaluate StorePulse against synthetic ground truth.")
     parser.add_argument("--skip-detection", action="store_true", help="Skip the rolling detection replay")
     args = parser.parse_args(argv)

@@ -13,6 +13,7 @@ only used later by ``src.evaluation``.
 from __future__ import annotations
 
 import argparse
+import sys
 import time
 from datetime import datetime
 
@@ -118,6 +119,8 @@ def run_pipeline(regenerate: bool = False, retrain: bool = False, verbose: bool 
 
 
 def main(argv=None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):  # legacy Windows consoles: never crash on unusual characters
+        sys.stdout.reconfigure(errors="replace")
     parser = argparse.ArgumentParser(description="Run the StorePulse processing pipeline.")
     parser.add_argument("--regenerate", action="store_true", help="Regenerate the synthetic dataset first")
     parser.add_argument("--retrain", action="store_true", help="Retrain the classifier first")

@@ -73,7 +73,7 @@ def test_regional_brief(pipeline_output):
     html = reporting.render_brief_html(brief)
     assert "<html" in html and "synthetic" in html.lower()
     csv = reporting.brief_to_csv(brief)
-    assert csv.splitlines()[0].startswith("region,week,rank")
+    assert csv.lstrip("\ufeff").splitlines()[0].startswith("region,week,rank")
 
 
 def test_case_status_persistence(tmp_path):

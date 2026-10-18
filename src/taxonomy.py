@@ -60,7 +60,9 @@ CATEGORIES: list[Category] = [
     ),
     Category(
         "allergen_labelling", "Allergen labelling concern", "Merchandising", "Critical", 0.22, "safety",
-        ("allergen", "allergy", "allergic", "nut free", "nut-free", "peanut", "gluten", "sesame",
+        # "gluten" alone is deliberately excluded: "gluten-free bread" is usually a range request.
+        ("allergen", "allergy", "allergic", "nut free", "nut-free", "peanut", "gluten allergy", "contains gluten",
+         "gluten but", "sesame",
          "lactose", "contains milk", "egg free", "ingredients", "allergy warning", "not declared",
          "allergen information", "allergen info"),
         "Treat as potential safety risk: withdraw the batch from sale pending verification, "

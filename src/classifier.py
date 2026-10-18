@@ -16,6 +16,7 @@ Train with ``python -m src.classifier --train``.
 from __future__ import annotations
 
 import argparse
+import sys
 import joblib
 import numpy as np
 import pandas as pd
@@ -212,6 +213,8 @@ def load_or_train() -> HybridClassifier:
 
 
 def main(argv=None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):  # legacy Windows consoles: never crash on unusual characters
+        sys.stdout.reconfigure(errors="replace")
     parser = argparse.ArgumentParser(description="Train / query the StorePulse classifier.")
     parser.add_argument("--train", action="store_true", help="(Re)train from the synthetic training corpus")
     parser.add_argument("--text", help="Classify a single text and print an explanation")
