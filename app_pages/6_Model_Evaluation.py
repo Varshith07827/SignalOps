@@ -107,7 +107,7 @@ with tab2:
 
 with tab3:
     r, c = esc["record_level"], esc["case_level"]
-    st.markdown(f"**Escalation precision = true actionable escalations / all escalations**")
+    st.markdown("**Escalation precision = true actionable escalations / all escalations**")
     ui.metric_row([
         ("Record-level precision", f"{r['escalation_precision']:.1%}", f"{r['true_actionable_escalations']:,} / {r['escalations']:,}"),
         ("Case-level precision", f"{c['escalation_precision']:.1%}", f"{c['true_actionable_cases']} / {c['escalated_cases']}"),

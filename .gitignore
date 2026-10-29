@@ -11,6 +11,8 @@ __pycache__/
 .ruff_cache/
 
 # Generated synthetic data and runtime state (recreate with `python -m src.pipeline`)
+data/
+models/
 data/generated/*
 !data/generated/.gitkeep
 data/state/*
@@ -23,7 +25,14 @@ artifacts/*
 # Secrets / local config
 .env
 .env.*
+!.env.example
 .streamlit/secrets.toml
+
+# JavaScript / build output / submission archives
+node_modules/
+dist/
+build/
+*.zip
 
 # OS / editor
 .DS_Store

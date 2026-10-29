@@ -13,6 +13,7 @@ holds a lock that blocks the pipeline - important on Windows.
 from __future__ import annotations
 
 import json
+import re
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -21,8 +22,17 @@ import duckdb
 import pandas as pd
 
 import config
+from src.taxonomy import OWNERS
 
 LIST_COLUMNS = ("entities", "evidence_ids")
+_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,62}$")
+
+
+def _quote_identifier(name: str) -> str:
+    """Validate and quote an internal DuckDB identifier before interpolation."""
+    if not isinstance(name, str) or not _IDENTIFIER.fullmatch(name):
+        raise ValueError(f"Invalid database identifier: {name!r}")
+    return f'"{name}"'
 
 
 @contextmanager
@@ -55,13 +65,13 @@ def write_tables(tables: dict[str, pd.DataFrame], path: Path = config.ANALYTICS_
         for name, df in tables.items():
             frame = _to_storable(df)
             con.register("_frame", frame)
-            con.execute(f'CREATE OR REPLACE TABLE "{name}" AS SELECT * FROM _frame')
+            con.execute(f"CREATE OR REPLACE TABLE {_quote_identifier(name)} AS SELECT * FROM _frame")
             con.unregister("_frame")
 
 
 def read_table(name: str, path: Path = config.ANALYTICS_DB_PATH) -> pd.DataFrame:
     with connect(path, read_only=True) as con:
-        return _fetch_df(con.execute(f'SELECT * FROM "{name}"'))
+        return _fetch_df(con.execute(f"SELECT * FROM {_quote_identifier(name)}"))
 
 
 def query(sql: str, params=None, path: Path = config.ANALYTICS_DB_PATH) -> pd.DataFrame:
@@ -70,6 +80,7 @@ def query(sql: str, params=None, path: Path = config.ANALYTICS_DB_PATH) -> pd.Da
 
 
 def table_exists(name: str, path: Path = config.ANALYTICS_DB_PATH) -> bool:
+    _quote_identifier(name)
     if not path.exists():
         return False
     with connect(path, read_only=True) as con:
@@ -125,10 +136,18 @@ def update_case(case_id: str, status: str | None = None, owner: str | None = Non
                 verification: str | None = None, note: str | None = None, actor: str = "local user",
                 path: Path = config.STATE_DB_PATH) -> dict:
     """Persist a status / owner / verification change and append audit events."""
+    if not isinstance(case_id, str) or not case_id.strip() or len(case_id) > 128:
+        raise ValueError("case_id must be a non-empty string of at most 128 characters")
     if status is not None and status not in config.CASE_STATUSES:
         raise ValueError(f"Invalid status {status!r}")
+    if owner is not None and owner not in OWNERS:
+        raise ValueError(f"Invalid owner {owner!r}")
     if verification is not None and verification not in config.VERIFICATION_STATES:
         raise ValueError(f"Invalid verification state {verification!r}")
+    if note is not None and len(note) > 2000:
+        raise ValueError("note must be at most 2,000 characters")
+    if not isinstance(actor, str) or not actor.strip() or len(actor) > 128:
+        raise ValueError("actor must be a non-empty string of at most 128 characters")
     init_state(path)
     now = datetime.now().replace(microsecond=0)
     with connect(path) as con:

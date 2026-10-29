@@ -4,7 +4,6 @@ import html
 import pandas as pd
 import streamlit as st
 
-import config
 from src import reporting, storage, ui
 
 ui.header("Regional Brief", "A one-page weekly action brief for each region's operations manager.")

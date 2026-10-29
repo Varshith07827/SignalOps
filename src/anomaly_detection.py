@@ -169,7 +169,7 @@ def detect_at(cube: CountCube, day_idx: int,
     def pick(key):
         return np.take_along_axis(np.stack([r[key] for r in results]), best[None], 0)[0]
 
-    cur_w, expected, lam_base = pick("cur"), pick("expected"), pick("lam_base")
+    cur_w, expected = pick("cur"), pick("expected")
     exposure_ratio, network_ratio, dispersion = pick("exposure_ratio"), pick("network_ratio"), pick("dispersion")
     window_days = np.array(windows)[best]
     rep = results[windows.index(settings.current_window_days)] if settings.current_window_days in windows else results[0]
