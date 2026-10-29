@@ -7,7 +7,7 @@ be replaced once official definitions are available.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 TAXONOMY_VERSION = "provisional-0.1"
 

@@ -88,6 +88,10 @@ def test_case_status_persistence(tmp_path):
     assert {"status", "owner", "verification"} <= set(hist["field"])
     with pytest.raises(ValueError):
         storage.update_case("CASE-1", status="Closed?", path=db)
+    with pytest.raises(ValueError):
+        storage.update_case("CASE-1", owner="Unknown team", path=db)
+    with pytest.raises(ValueError):
+        storage.update_case("", path=db)
 
 
 def test_verification_states_distinguish_allegation_from_verified():

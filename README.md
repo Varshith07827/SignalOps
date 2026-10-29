@@ -71,6 +71,31 @@ Python 3.13 · Streamlit · pandas · NumPy · scikit-learn · SciPy · Plotly �
 No paid APIs, API keys, LLM services or internet access are needed at runtime. Tested with Python 3.13.16,
 Streamlit 1.66, pandas 3.0, scikit-learn 1.9, DuckDB 1.5.
 
+## AI usage
+
+The application has no runtime LLM, hosted model, agent or MCP dependency. The classifier is a local,
+deterministic hybrid of documented keyword rules and a scikit-learn TF-IDF/logistic-regression model.
+AI coding assistance was used to inspect and improve the repository; all application logic, synthetic data
+templates and evaluation scenarios are authored for this hackathon.
+
+## Pre-built and third-party code
+
+The StorePulse application was created for this hackathon and does not reuse application code from a
+previous hackathon or project. It uses the open-source packages listed in `requirements.txt` and pinned in
+`requirements.lock`; their respective licences remain with those projects. No external templates or copied
+snippets are included.
+
+## Reproducible dependencies
+
+Use `requirements.lock` for the tested dependency set:
+
+```bash
+python -m pip install -r requirements.lock
+```
+
+The generated datasets, DuckDB files, trained model, virtual environments and local `.env` files are
+excluded by `.gitignore`. `.env.example` contains only non-secret defaults.
+
 ## Installation (Windows, PowerShell)
 
 ```powershell
@@ -78,7 +103,7 @@ cd StorePulse                      # the repository folder
 py -3.13 -m venv .venv
 .venv\Scripts\Activate.ps1          # if blocked: Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+python -m pip install -r requirements.lock
 ```
 
 macOS/Linux: `python3.13 -m venv .venv && source .venv/bin/activate`, then the same `pip` commands.
