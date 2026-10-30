@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Voice of Store · Saffron Retail</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
+  <script src="map.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="bar">
+    <div class="brand">
+      <span class="mark" aria-hidden="true"></span>
+      <span class="brand-name">Saffron Retail</span>
+      <span class="product">Voice of Store</span>
+    </div>
+    <form id="upload-form" class="data">
+      <span id="dataset" class="dataset">Loading the R5 dataset...</span>
+      <label class="file">
+        <input id="file" type="file" accept=".csv" required>
+        <span id="file-name">Choose a CSV</span>
+      </label>
+      <button type="submit" class="btn primary">Upload</button>
+      <button type="button" id="show-dataset" class="btn quiet" hidden>Back to R5 dataset</button>
+    </form>
+  </header>
+
+  <p id="notice" class="notice" role="status" hidden></p>
+
+  <main id="content" hidden>
+    <section class="context">
+      <h1 class="headline">
+        <select id="region" aria-label="Region"></select>
+        <span class="joiner">week of</span>
+        <select id="week" aria-label="Week"></select>
+      </h1>
+      <dl class="strip">
+        <div><dt>Messages</dt><dd id="n-messages">-</dd></div>
+        <div><dt>Need action</dt><dd id="n-action">-</dd></div>
+        <div class="is-urgent"><dt>Urgent</dt><dd id="n-urgent">-</dd></div>
+        <div class="is-warning"><dt>Early warnings</dt><dd id="n-warnings">-</dd></div>
+      </dl>
+    </section>
+
+    <div class="layout">
+      <section class="issues-panel" aria-labelledby="top-title">
+        <h2 id="top-title">Top issues to act on</h2>
+        <ol id="top-issues" class="issues"></ol>
+      </section>
+
+      <aside class="rail">
+        <section aria-labelledby="warn-title">
+          <h2 id="warn-title">Early warnings this week</h2>
+          <ul id="warnings-now" class="warnings"></ul>
+          <details class="earlier">
+            <summary id="earlier-summary">Earlier warnings</summary>
+            <ul id="warnings-earlier" class="warnings compact"></ul>
+          </details>
+        </section>
+
+        <section aria-labelledby="teams-title">
+          <h2 id="teams-title">Who must act this week</h2>
+          <p class="hint">Click a team to see its cases, week by week.</p>
+          <ul class="legend" aria-hidden="true">
+            <li><i class="sw critical"></i>Critical</li>
+            <li><i class="sw high"></i>High</li>
+            <li><i class="sw medium"></i>Medium</li>
+            <li><i class="sw low"></i>Low</li>
+          </ul>
+          <ul id="teams" class="teams"></ul>
+        </section>
+
+        <section aria-labelledby="rule-title">
+          <h2 id="rule-title">When to escalate</h2>
+          <ul id="rule" class="rule"></ul>
+        </section>
+      </aside>
+    </div>
+
+    <section class="map-panel" aria-labelledby="map-title">
+      <div class="accuracy-head">
+        <h2 id="map-title">Stores on the map</h2>
+        <ul class="legend" aria-hidden="true">
+          <li><i class="sw critical"></i>Critical</li>
+          <li><i class="sw high"></i>High</li>
+          <li><i class="sw medium"></i>Medium</li>
+          <li><i class="sw low"></i>Low</li>
+          <li><i class="sw ring"></i>Early warning</li>
+        </ul>
+      </div>
+      <p class="hint">Zoom out to see the five regions, zoom in to see each store. The number is this week's cases.</p>
+      <div class="map-wrap">
+        <div id="map" class="map" role="region" aria-label="Map of Saffron stores"></div>
+        <aside id="store-card" class="store-card" aria-live="polite">
+          <p class="hint">Click a store to see its problems this week and the last one that was solved. Click a problem to see its cases.</p>
+        </aside>
+      </div>
+    </section>
+
+    <section class="accuracy-panel" aria-labelledby="review-title">
+      <h2 id="review-title">Check a new review</h2>
+      <form id="review-form" class="review-form">
+        <label>Store
+          <select id="review-store"><option value="">No store (online or app)</option></select>
+        </label>
+        <label>Channel
+          <select id="review-channel">
+            <option value="online_review">Online review</option>
+            <option value="in_app">App comment</option>
+            <option value="staff_shift_note">Staff shift note</option>
+            <option value="call_centre_ticket">Call-centre call</option>
+          </select>
+        </label>
+        <label>Rating
+          <select id="review-rating">
+            <option value="">No rating</option>
+            <option value="1">1 star</option>
+            <option value="2">2 stars</option>
+            <option value="3">3 stars</option>
+            <option value="4">4 stars</option>
+            <option value="5">5 stars</option>
+          </select>
+        </label>
+        <label class="wide">Message
+          <textarea id="review-text" rows="3" minlength="3" maxlength="2000" required
+            placeholder="For example: freezer not cold since morning, ice cream melting"></textarea>
+        </label>
+        <button type="submit" id="review-submit" class="btn primary">Check review</button>
+      </form>
+      <div id="review-result" class="review-result" aria-live="polite"></div>
+      <ul id="review-history" class="review-history"></ul>
+    </section>
+
+    <section class="accuracy-panel" aria-labelledby="eval-title">
+      <div class="accuracy-head">
+        <h2 id="eval-title">Official score</h2>
+        <div class="actions">
+          <a id="download-report" class="btn quiet" href="/api/report" download hidden>Download report</a>
+          <button type="button" id="run-evaluate" class="btn primary">Run evaluate.py</button>
+        </div>
+      </div>
+      <div id="evaluation" class="evaluation">
+        <p class="hint">Scores the files in submission/ against the labelled weeks with the organisers' evaluate.py. Takes a few seconds.</p>
+      </div>
+    </section>
+
+    <section class="accuracy-panel" aria-labelledby="acc-title">
+      <div class="accuracy-head">
+        <h2 id="acc-title">How accurate is it</h2>
+        <button type="button" id="check-accuracy" class="btn quiet">Check accuracy</button>
+      </div>
+      <div id="accuracy" class="accuracy">
+        <p class="hint">Tests the model on labelled messages it has never seen. Takes about 15 seconds.</p>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="cases-dialog" class="drawer" aria-labelledby="drawer-title">
+    <div class="drawer-head">
+      <div>
+        <p id="drawer-scope" class="eyebrow"></p>
+        <h2 id="drawer-title">Cases</h2>
+      </div>
+      <button type="button" id="drawer-close" class="btn quiet">Close</button>
+    </div>
+    <label class="drawer-week">Week starting
+      <select id="drawer-week"></select>
+    </label>
+    <div id="drawer-filters" class="chips" role="group" aria-label="Show by severity"></div>
+    <ol id="drawer-cases" class="cases"></ol>
+  </dialog>
+</body>
+</html>

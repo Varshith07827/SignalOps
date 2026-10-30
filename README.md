@@ -1,187 +1,211 @@
-# StorePulse — Voice-of-Store Intelligence Engine
+# 1213 · R5: Voice-of-Store Engine
 
-**From feedback to foresight.** Talent AP Mega Hackathon 2026 · Problem Statement R5 · proof of concept
+Turns 40k messy, multilingual store-feedback records into a routed, prioritised weekly action list per region,
+and flags store-level problems while they are still small.
 
-StorePulse turns unstructured, multilingual retail feedback (online reviews, in-app ratings, store-staff
-notes and call-centre transcripts) into prioritised, owned and explainable operational actions:
+## What it does
 
+### Problem statement (R5)
+
+Saffron Retail, a grocery chain with 60 stores in five regions of India, receives about 1,500 feedback
+messages a week: online reviews, app comments, staff shift notes and call-centre transcripts. They are in
+English, Hinglish, transliterated Tamil and Marathi, with typos, emojis and shorthand. Real store problems
+(a broken freezer, a mislabelled allergen, a rude billing counter) are buried in this noise and reach head
+office weeks late.
+
+The task is to turn this feedback into a prioritised weekly action list routed to the right owner:
+
+* label every message with an issue type, a severity and whether someone can act on it;
+* route each issue to its owning team with a severity and a stated escalation rule;
+* flag an issue that is small in volume but rising sharply at one store, before it shows up chain-wide,
+  using only feedback up to that week's Sunday and citing at least two messages as evidence;
+* write a one-page brief per region each week: top 5 issues, evidence quotes, affected stores and a trend
+  arrow against last week;
+* report a score from the organisers' `evaluate.py` and a precision statement (of the issues escalated, how
+  many were truly actionable).
+
+The data has 39,769 messages over 26 weeks, with labels for 3,000 messages from the first 13 weeks.
+
+### What the engine does
+
+1. **Classifies** every record: issue type (IT01–IT30, NI01–NI03), severity (low to critical) and actionable (0/1).
+2. **Routes** every actionable record to its owning team with an escalation level and deadline.
+3. **Detects emerging issues** week by week, using only feedback up to that week's Sunday.
+4. **De-duplicates** the same incident reported through several channels (stretch goal).
+5. **Writes a one-page brief per region per week**: top 5 issues, owner, severity, quotes, stores, trend arrow.
+
+**Users:** regional managers and team heads. They use the dashboard: the week's numbers, the region's top 5
+issues, early warnings, each team's case list with deadlines, a map of all stores, a form to check a new
+review, and buttons to run `evaluate.py` and the accuracy check.
+
+### Results
+
+| | This engine | Pack baseline |
+|---|---|---|
+| Classification, 5-fold cross-validated | **0.945** | 0.579 |
+| Issue type / severity / actionable F1 | 0.934 / 0.941 / 0.970 | 0.559 / 0.448 / 0.751 |
+| Lead on the public example EX-1 | +2 weeks (lead score 0.667) | +0 (0.333) |
+| Flags per week (limit 3) | 1.15 | 2.08 |
+| `evaluate.py` primary score on the training labels | 0.867 | 0.481 |
+
+`evaluate.py` scores the training labels, which the model was trained on, so its classification part is 1.000.
+The cross-validated 0.945 is the honest estimate for the hidden weeks.
+
+**Precision statement** (5-fold cross-validation on the 3,000 labelled records): of the records we marked
+actionable, **97.0%** truly were (1,777 marked). Of those we also marked high or critical (our escalations),
+**97.4%** were truly actionable (416 escalated).
+
+## How to run
+
+Needs Python 3.11 or newer. From the project root:
+
+```bash
+cd FULL_CODE && uv sync && cd ..
 ```
-Feedback → Classification → Deduplication → Severity → Trend detection → Prioritisation → Ownership → Action brief
+
+Without uv: `pip install numpy pandas scikit-learn scipy fastapi uvicorn python-multipart pytest ruff`.
+
+**Data:** copy the pack's `data/*.csv` files into `FULL_CODE/data/` (git-ignored, never committed).
+
+```bash
+python FULL_CODE/main.py --cv     # writes submission/, FULL_CODE/outputs/ (records, briefs, CV report)
+python FULL_CODE/serve.py         # dashboard at http://127.0.0.1:8000 (add --port 8001 if 8000 is busy)
 ```
 
-> **Synthetic-data disclosure.** No official dataset, store master, taxonomy or evaluation script was provided.
-> Every record, store, incident and metric in this repository is **synthetic**, generated locally by
-> `src/data_generator.py`. Nothing here represents a real retailer, and no figure is an official hackathon
-> result. The three planted incidents are our own test scenarios, not the organisers' hidden incidents.
+Detector for one week (the command in `submission/detector_cmd.txt`), run from the project root:
 
----
+```bash
+python FULL_CODE/detect.py --feedback FULL_CODE/data/feedback.csv --as-of 2026-07-13 --out FULL_CODE/outputs/week.csv
+```
 
-## Features
+It reads every data file from the folder that holds `--feedback`, so it also runs on a disguised copy of the data.
 
-| Area | What it does |
-|---|---|
-| Synthetic data | Deterministic generator (seed `20260`): 40,000 records, 60 stores in 5 regions, 4 store formats, 4 channels, 26 weeks, seasonality, duplicate reports, typos, abbreviations, emojis, truncation, Hinglish and a small controlled set of transliterated Tamil/Telugu/Marathi/Bengali/Kannada phrases, plus out-of-taxonomy feedback. |
-| Planted scenarios | **A** emerging refrigeration failure (S013), **B** single-report allergen concern (S002), **C** emerging payment failure (S039), plus negative controls **N1** (chronic high-volume store) and **N2** (network-wide seasonal AC rise). Documented in `data/generated/scenario_manifest.json`. |
-| Classification | Normalisation + documented glossary → weighted keyword/phrase rules + TF-IDF (word 1–2 g, char 3–5 g) logistic regression → hybrid probability → *auto* / *review* / *unclassified*. Every prediction is explained (rule hits, contributing terms, top-3 alternatives). |
-| Severity policy | Deterministic rules (`src/taxonomy.py`): allergen, food safety, hygiene/pests, physical safety and staff misconduct are High/Critical from a **single** report; aggravating terms (injury, reaction, harassment) lift to Critical. Category, severity, confidence, verification and required action are separate fields. |
-| Deduplication | Conservative: same store + predicted category + within 36 h of the cluster's first report + text/entity/time score. Uncertain matches are *possible duplicates*, never silently merged. All originals preserved. |
-| Emerging issues | Store × category unique-incident counts vs an empirical-Bayes baseline, adjusted for store volume and network trend, negative-binomial tail test on 7- and 14-day windows, Benjamini–Hochberg control and minimum-evidence rules. |
-| Prioritisation & routing | Policy tiers (P1 Critical policy > P2 High policy / high-severity trend > P3 trend) override a 0–100 score from normalised severity, evidence, trend, breadth and persistence. Provisional owner mapping to Store Ops, Supply Chain, Merchandising, Digital, HR. |
-| Workflow | Case status (New / Under Review / Assigned / Resolved), owner override, verification state (Allegation → Under investigation → Verified / Not substantiated), notes and audit trail persisted locally in DuckDB. |
-| Reporting | One-page weekly regional action brief; downloadable as self-contained HTML (print to PDF from the browser) and CSV. |
-| Evaluation | `python -m src.evaluation`: classification P/R/F1 + confusion matrix, escalation precision, dedup precision/recall, detection rate, false positives, detection delay, scenario checks. |
+Official scorer, with the pack folder `R5_Voice_of_Store_Engine/` in the project root (git-ignored), or the
+**Run evaluate.py** button in the dashboard:
+
+```bash
+python R5_Voice_of_Store_Engine/evaluate.py --submission submission/R5_predictions.csv --truth FULL_CODE/data/feedback_labels_train.csv --feedback FULL_CODE/data/feedback.csv --stores FULL_CODE/data/store_master.csv
+```
+
+**Settings:** every threshold, window, weight and deadline is in `FULL_CODE/config.toml`.
+**Environment variables** (optional, see `FULL_CODE/.env.example`): `VOS_CONFIG` (another settings file) and
+`VOS_LOG_LEVEL`. No secrets or API keys are needed.
+
+## How to run the tests
+
+```bash
+cd FULL_CODE && python -m pytest -q
+```
+
+64 tests on small synthetic data (the pack is not needed). Lint and format: `ruff check .` and `ruff format .`.
 
 ## Architecture
 
-```
-config.py                 all thresholds and paths (single source of truth)
-app.py                    Streamlit entry point + Overview page (st.navigation)
-app_pages/                1_Command_Centre … 6_Model_Evaluation (presentation only)
-src/
-  data_generator.py       synthetic stores, feedback, planted scenarios, training corpus, validation
-  phrasebank.py           generator-only text templates (never used by the classifier)
-  preprocessing.py        normalisation, glossary, emoji tokens, negation, entity extraction
-  taxonomy.py             provisional categories, owners, severity policy rules
-  classifier.py           hybrid rules + TF-IDF logistic regression with abstention and explanations
-  severity.py             deterministic policy engine
-  deduplication.py        conservative incident clustering
-  anomaly_detection.py    store × category emerging-issue detector (+ rolling replay)
-  prioritization.py       case building, tiers, priority score, explanations
-  routing.py              owner assignment and recommended actions
-  reporting.py            regional brief (dict → HTML / CSV)
-  evaluation.py           synthetic-ground-truth evaluation and scenario checks
-  storage.py              DuckDB analytics tables + separate case-state database
-  pipeline.py             orchestration (`python -m src.pipeline`)
-  ui.py                   shared Streamlit styling and cached loaders
-tests/                    pytest suite (66 tests)
-data/generated/           synthetic data, model inputs, analytics DB (git-ignored)
-data/state/               case workflow state (git-ignored)
-artifacts/                trained model, evaluation report (git-ignored)
+```mermaid
+flowchart LR
+    data[("FULL_CODE/data/<br/>pack CSVs")] --> io["data_io<br/>load and validate"]
+    io --> text["text<br/>clean text, find store,<br/>language"]
+    text --> clf["classifier + policy<br/>issue, severity, actionable"]
+    clf --> route["routing<br/>owner, escalation, deadline"]
+    clf --> dedup["dedup<br/>merge same incident"]
+    clf --> det["detector<br/>weekly early warnings"]
+    route --> brief["brief<br/>top 5 per region"]
+    dedup --> brief
+    det --> brief
+    clf --> pred[("submission/<br/>R5_predictions.csv")]
+    det --> flags[("submission/<br/>R5_emerging_flags.csv")]
+    brief --> out[("outputs/<br/>briefs, records.csv")]
 ```
 
-Business logic lives in `src/` and has no Streamlit dependency; pages only present results.
-The page folder is named `app_pages/` rather than `pages/` on purpose: a folder called `pages/` switches on
-Streamlit's legacy auto-discovery, which bypasses `st.navigation` (and the app's styling) when a page URL is
-opened directly as the first request after the server starts.
-Ground-truth columns are stripped by `pipeline.strip_ground_truth` before any inference.
+The three entry points share the same core. The web layer holds no analysis logic.
 
-## Technology stack
-
-Python 3.13 · Streamlit · pandas · NumPy · scikit-learn · SciPy · Plotly · DuckDB · PyArrow · pytest.
-No paid APIs, API keys, LLM services or internet access are needed at runtime. Tested with Python 3.13.16,
-Streamlit 1.66, pandas 3.0, scikit-learn 1.9, DuckDB 1.5.
-
-## Installation (Windows, PowerShell)
-
-```powershell
-cd StorePulse                      # the repository folder
-py -3.13 -m venv .venv
-.venv\Scripts\Activate.ps1          # if blocked: Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+```mermaid
+flowchart TB
+    main["main.py<br/>full build"] --> pipe["pipeline.py"]
+    detect["detect.py<br/>one week, causal"] --> pipe
+    web["web/<br/>index.html, app.js, map.js"] -- JSON --> api["api/server.py<br/>FastAPI routes + input checks"]
+    serve["serve.py"] --> api
+    api --> svc["service.py + insights.py<br/>dashboard views"]
+    api --> scoring["scoring.py<br/>runs evaluate.py"]
+    svc --> pipe
+    pipe --> core["data_io · text · classifier · policy<br/>routing · dedup · detector · brief"]
+    config["config.toml"] -.-> core
 ```
 
-macOS/Linux: `python3.13 -m venv .venv && source .venv/bin/activate`, then the same `pip` commands.
+How one week's flags are made, by `detect.py` and, week by week, by `main.py`:
 
-## Running
-
-```powershell
-python -m src.data_generator       # 1. generate 40,000 synthetic records + training corpus (~5 s)
-python -m src.classifier --train   # 2. train / initialise the classifier (~7 s)
-python -m src.pipeline             # 3. classify, score, deduplicate, detect, build cases (~40 s)
-python -m src.evaluation           # 4. synthetic evaluation + scenario checks (~10 s, exit code 1 if a check fails)
-streamlit run app.py               # 5. open http://localhost:8501
+```mermaid
+flowchart LR
+    a["--as-of date"] --> b["drop feedback created<br/>after that Sunday"]
+    b --> c["train the classifier on<br/>labels still visible"]
+    c --> d["expected count per store<br/>and issue, from the store's<br/>history and chain-wide trend"]
+    d --> e["surprise test over<br/>1- and 2-week windows"]
+    e --> f["at most 3 flags,<br/>4-week cooldown,<br/>at least 2 evidence ids"]
 ```
 
-`python -m src.pipeline` alone also works: it generates data and trains the model if they are missing.
-Options: `python -m src.pipeline --regenerate` (rebuild data), `--retrain` (retrain model);
-`python -m src.data_generator --seed 7 --records 20000`; `python -m src.classifier --text "fridge thanda nahi hai"`.
-The Overview page offers the same controls as buttons (run pipeline, retrain, regenerate, reset case state).
-
-Tests:
-
-```powershell
-python -m pytest -q
-```
-
-The suite uses small fixtures and one shared 12,000-record dataset; it never regenerates the 40,000 records.
-
-## Results on the synthetic dataset (seed 20260)
-
-All numbers below come from `python -m src.evaluation` on the default dataset. They are **synthetic-data
-evaluation results**, optimistic by construction, and not official results.
-
-| Metric | Value |
+| Part | Job |
 |---|---|
-| Scenario checks (A, B, C, N1) | 15 / 15 pass |
-| Classification macro F1 — hold-out phrasings (never seen in training), incident level | 0.645 (P 0.679, R 0.639, coverage 0.888, accuracy when classified 0.896) |
-| Classification macro F1 — all incidents (mostly seen phrasings) | 0.953 |
-| Out-of-taxonomy feedback left unclassified / sent to review / force-labelled | 87.3% / 11.9% / 0.7% |
-| Escalation precision (true actionable escalations / all escalations), record level | 0.980 (3,229 / 3,294) |
-| Escalation precision, case level | 0.989 (93 / 94) |
-| Recall of true Critical reports (escalated) | 0.988 |
-| Deduplication pairwise precision / recall | 0.853 / 0.445 (deliberately conservative) |
-| Estimated vs true unique incidents | 36,010 vs 33,025 |
-| Planted trend detection rate | 2 / 2 |
-| Detection delay after onset (rolling replay, no look-ahead) | A 12.4 days · C 11.4 days |
-| Unplanted flag episodes over 121 as-of days × 1,800 cells | 12 (11 match genuinely elevated synthetic counts, 1 pipeline artefact) |
-| Flag-day precision: StorePulse vs naive "top-10 by raw volume" | 31.4% vs 1.4% (naive flags chronic store N1 on 121/121 days) |
+| `main.py`, `detect.py`, `serve.py` | Entry points: full build, one week's flags, dashboard |
+| `config.toml` | All settings |
+| `api/server.py` | FastAPI routes, input checks, security headers |
+| `web/` | Dashboard page: plain HTML, CSS and JavaScript, no build step |
+| `src/voice_of_store/` | Core logic, one module per job (see the first diagram) plus `service`, `insights`, `scoring`, `evaluation` (cross-validation), `reports` (writes files) and `store_locations.csv` (map) |
+| `tests/` | pytest suite |
 
-**How to read these honestly.** The gap between hold-out (0.645) and seen phrasings (0.999) shows that the
-headline 0.953 mostly measures template recall; the hold-out figure is the better estimate. A naive raw-volume
-ranking surfaces the planted cells sooner (A after 2.4 days) because duplicate reports inflate raw counts, but it
-is almost all noise. StorePulse waits for independent incidents above baseline, which costs about 1–1.5 weeks
-of delay on these scenarios.
+**Classifier.** TF-IDF over words (1–2 grams) and characters (2–5 grams) copes with typos, emojis and mixed
+languages without translation. Three linear SVMs predict issue type, severity and actionable. The guideline
+rules sit on top: severity is never below the taxonomy floor, praise and spam are never actionable, and an
+issue with no known store is actionable only for order, app, payment, refund and loyalty types (IT23–IT29).
+Logistic regression, Ridge, naive Bayes, SGD and LightGBM were also tried. Ridge scored slightly higher in
+cross-validation (0.954); the team kept linear SVMs.
 
-## Key definitions
+**Detector.** For each store, issue and week, the expected count is the store's feedback volume times its own
+history for that issue (pulled toward the chain average for small stores) times the chain-wide change, so an
+outage or festival that hits every store is not flagged. A Poisson test flags counts far above that. Safety
+and hygiene issues need fewer reports. Each flag cites every same-week, same-store record of that issue.
 
-* **Escalation precision** = true actionable escalations / all escalations. Record level: an escalation is a
-  report with a mandatory policy escalation; it is truly actionable when the synthetic ground truth says
-  actionable and its true severity is High or Critical.
-* **Incident onset** = timestamp of the first synthetic report of a planted scenario. **Detection time** =
-  end of the first as-of day on which the detector, using only data up to that moment, confirms a flag for
-  the scenario's store and category. **Detection delay** = detection time − onset.
-* **Verification** is never inferred. Every case starts as *Allegation (unverified)*; only a user can mark it
-  *Under investigation*, *Verified incident* or *Not substantiated*.
+**No future data.** `detect.py` drops every row created after the as-of Sunday before training or detecting.
+`main.py` builds `R5_emerging_flags.csv` the same way, week by week; running `detect.py` for all 26 weeks gives
+the same file. No dates, week numbers or ids are hard-coded.
 
-## Severity and escalation policy (provisional)
+**Escalation rule.** Only actionable records are routed, to the team in the taxonomy's `owner_function`.
 
-| Rule | Applies to | Floor | Critical when |
-|---|---|---|---|
-| POL-ALLERGEN | allergen labelling, or allergen terms in any text | Critical | always |
-| POL-FOODSAFETY | food safety / contamination, illness terms | Critical | always |
-| POL-FOODSAFETY-EXPIRY | expired product | High | illness terms |
-| POL-HYGIENE | hygiene, pests, pest terms | High | contamination of food |
-| POL-SAFETY | physical hazards | High | injury terms |
-| POL-CONDUCT | staff misconduct | High | harassment, assault, threats, public accusation |
-| Trend escalation | confirmed emerging trend (q ≤ 0.01) | +1 level, max High | — |
+| Condition | Action | Deadline |
+|---|---|---|
+| Critical (injury, illness, allergic reaction, assault) | Head of the owning team | 24 h |
+| Early warning at a store | Regional manager and the owning team | 24–72 h |
+| High | Owning team | 72 h |
+| Medium | Owning team's weekly queue | 7 days |
+| Low | Weekly brief only | — |
 
-Critical policy → P1 *Mandatory escalation (24h)*; High policy → P2 *Mandatory review (72h)*. Report volume is
-never an input to policy severity, so a single report always escalates.
+## AI usage
 
-## Supported language phrases
+* **In the app:** no LLMs, external APIs or downloaded models. The classifier is trained at run time with
+  scikit-learn on the labelled records in the data folder; nothing is pickled or loaded from disk.
+* **AI coding assistant:** built with Claude Code (Anthropic's Claude Opus 5.5), which explored the data,
+  wrote the code, tests and this README under the team's direction.
 
-Only the phrases in `src/preprocessing.py::GLOSSARY` are understood beyond what the model learnt from the
-synthetic corpus: about 40 Hinglish expressions and a handful each of transliterated Tamil, Telugu, Marathi,
-Bengali and Kannada. The language hint shown in the UI is a heuristic based on that glossary. Other languages
-(e.g. Malayalam, or any native script) are **not supported** and are routed to human review when vocabulary is
-unrecognised.
+## Pre-built and third-party code
 
-## Known limitations
+* MIT licence (see `LICENSE`).
+* Before Day 1 the repository held a proof of concept ("StorePulse") on self-generated data. It was removed
+  when the official dataset arrived and none of it is used.
+* Python libraries: numpy, pandas, scikit-learn, scipy, FastAPI, uvicorn, python-multipart, pytest, ruff
+  (BSD, MIT and Apache licences), pinned in `FULL_CODE/uv.lock`. `pip-audit` found no known vulnerabilities.
+* In the browser: Leaflet 1.9.4 (BSD-2-Clause) from unpkg with a pinned version and integrity hash, map
+  tiles © Esri, and the Archivo font from Google Fonts (SIL Open Font License).
+* No templates, starter kits or copied snippets. The pack's `baseline.py` and `evaluate.py` were run for
+  comparison and are not included.
 
-* Synthetic data only; templates and noise were authored by the same team as the classifier, so all metrics are
-  optimistic. Real feedback will be messier and the hold-out F1 of 0.645 already shows a large generalisation gap.
-* The taxonomy, owner mapping, severity policy and thresholds are provisional assumptions awaiting official
-  definitions.
-* Deduplication favours precision; recall is about 0.45, so unique incidents are over-estimated (~9%).
-* Emerging detection confirms the planted trends about 11–12 days after onset; faster detection would need
-  stronger priors or a policy-aware early-warning rule. Twelve unplanted flag episodes occurred in the replay.
-* Detection operates per store; a multi-store problem appears as several store flags plus the network-movement
-  view, not as one cross-store incident.
-* Case IDs are tied to the reporting week of the current data; regenerating data with a different seed creates
-  new cases (old workflow state remains in `data/state` but no longer matches).
-* DuckDB allows one writer: run the pipeline from the Overview page, or stop the app before running
-  `python -m src.pipeline` in another terminal if you see a lock error.
-* The HTML brief is the export format; PDF is produced with the browser's "Print → Save as PDF".
+## Limitations
 
-See `DEMO_GUIDE.md` for the two-minute demonstration script.
+* The hidden incidents are unknown. Detector settings were chosen on the one public example. Incidents
+  spread thinly over many stores (for example one mislabelled product) are caught late or at one store only.
+* Most flags are real but small rises: 13 of the 15 flags in the labelled weeks are not the known incident.
+* In the first weeks few labels are visible, so 2 early flags fail `evaluate.py`'s own-label check.
+* Severity is the weakest label (F1 0.94); critical and high are confused most often.
+* A store is found in the text only by its exact locality name; misspellings are missed.
+* Map locations are approximate (the dataset gives only the city), the map needs internet, and "last
+  solved" means the complaints stopped, since the data has no record of fixes.
+* Next steps: detect multi-store product incidents, ask a human to label unsure records, and let teams close
+  cases so fixes can be checked.

@@ -1,0 +1,71 @@
+# Voice-of-Store Engine settings. Every threshold the pipeline uses lives here.
+# Paths are relative to this file's folder (FULL_CODE/).
+
+[paths]
+data_dir = "data"
+outputs_dir = "outputs"
+submission_dir = "../submission"
+
+[classifier]
+seed = 2026
+cv_folds = 5
+# LinearSVC regularisation per label, picked with 5-fold cross-validation (higher = fits the training data
+# more closely). Severity and actionable stop improving above 3.
+issue_c = 1.0
+severity_c = 3.0
+actionable_c = 3.0
+word_ngram_max = 2
+char_ngram_min = 2
+char_ngram_max = 5
+char_min_df = 2
+
+[detector]
+# How strongly a store's baseline is pulled toward the chain average, counted in records.
+prior_strength = 30.0
+# Weeks of history for the baseline, plus a gap so a slow build-up isn't treated as normal.
+history_weeks = 10
+gap_weeks = 2
+min_history_weeks = 3
+# Windows (in weeks) scanned for a rise; the smallest p-value wins.
+scan_windows = [1, 2]
+# A chain-wide rise of the same issue raises every store's expectation (festival, outage, monsoon).
+chain_ratio_min = 1.0
+chain_ratio_max = 5.0
+# Minimum records this week at the store: the evidence rule needs 2; non-policy issues need 3.
+min_count_policy = 2
+min_count_other = 3
+# Policy issues (floor = high: safety, hygiene, allergens, food safety, misconduct) get a lower bar.
+policy_weight = 10.0
+p_value_threshold = 1e-4
+max_flags_per_week = 3
+# An open escalation is not re-raised for the same store and issue within this many weeks.
+cooldown_weeks = 4
+
+[dedup]
+# Reports of the same predicted issue at the same store within this window count as one incident.
+window_hours = 72
+
+[brief]
+top_n = 5
+quotes_per_issue = 2
+quote_max_chars = 220
+# On the dashboard map, a store's problem counts as solved after this many weeks with no complaints.
+solved_after_quiet_weeks = 2
+
+[evaluation]
+# The organisers' scorer is not part of this repository. It is expected in the problem pack folder
+# next to FULL_CODE/ (git-ignored). Change this path if your copy is somewhere else.
+evaluator_path = "../R5_Voice_of_Store_Engine/evaluate.py"
+timeout_seconds = 300
+
+[server]
+# Web dashboard. Local only: bind to this machine, not the network.
+host = "127.0.0.1"
+port = 8000
+max_upload_mb = 50
+
+[routing]
+# Escalation SLA in hours by severity (README "Routing and escalation rule").
+sla_hours_critical = 24
+sla_hours_high = 72
+sla_hours_medium = 168
