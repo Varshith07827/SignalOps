@@ -9,7 +9,7 @@ submission_dir = "../submission"
 [classifier]
 seed = 2026
 cv_folds = 5
-# LinearSVC regularisation for the issue-type model (picked by 5-fold CV on the labelled sample).
+# LinearSVC regularisation for the issue-type model (picked with 5-fold cross-validation).
 issue_c = 1.0
 # Logistic regression regularisation for the severity and actionable models.
 severity_c = 5.0
@@ -20,10 +20,9 @@ char_ngram_max = 5
 char_min_df = 2
 
 [detector]
-# Pseudo-records of chain-wide mix mixed into each store's baseline (empirical-Bayes shrinkage).
+# How strongly a store's baseline is pulled toward the chain average, counted in records.
 prior_strength = 30.0
-# Weeks of history used for the baseline, and the gap left between baseline and the tested window
-# so a slow ramp does not leak into its own baseline.
+# Weeks of history for the baseline, plus a gap so a slow build-up isn't treated as normal.
 history_weeks = 10
 gap_weeks = 2
 min_history_weeks = 3
@@ -51,13 +50,17 @@ top_n = 5
 quotes_per_issue = 2
 quote_max_chars = 220
 
-[runner]
-# Dashboard "Run" tab. The organisers' scorer is not part of this repository: point this at your copy
-# of the problem pack's evaluate.py (the scorer button is disabled when the file is missing).
+[evaluation]
+# The organisers' scorer is not part of this repository. It is expected in the problem pack folder
+# next to FULL_CODE/ (git-ignored). Change this path if your copy is somewhere else.
 evaluator_path = "../R5_Voice_of_Store_Engine/evaluate.py"
-detect_timeout_seconds = 600
-build_timeout_seconds = 1200
-evaluate_timeout_seconds = 300
+timeout_seconds = 300
+
+[server]
+# Web dashboard. Local only: bind to this machine, not the network.
+host = "127.0.0.1"
+port = 8000
+max_upload_mb = 50
 
 [routing]
 # Escalation SLA in hours by severity (README "Routing and escalation rule").

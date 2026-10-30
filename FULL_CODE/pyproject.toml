@@ -9,7 +9,9 @@ dependencies = [
     "pandas>=2.2",
     "scikit-learn>=1.5",
     "scipy>=1.13",
-    "streamlit>=1.40",
+    "fastapi>=0.115",
+    "python-multipart>=0.0.18",
+    "uvicorn>=0.30",
 ]
 
 [dependency-groups]
@@ -23,12 +25,12 @@ package = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 
 [tool.ruff]
 line-length = 120
 target-version = "py311"
-src = ["src", "tests", "app"]
+src = ["src", "tests", "."]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "N"]

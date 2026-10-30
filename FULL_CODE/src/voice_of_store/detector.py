@@ -1,18 +1,10 @@
-"""Weekly emerging-issue detector (causal: week w only ever sees weeks <= w).
+"""Weekly early-warning detector. Week w only uses data from weeks up to w.
 
-For every (store, issue type) cell the detector asks: given how much feedback this store produced this week, and
-how often this store usually reports this issue, how surprising is this week's count? Concretely:
-
-* expected = store's feedback volume in the window x the store's smoothed historical share of the issue
-  (empirical-Bayes: shrunk toward the chain-wide mix, so small Express stores are not judged on 2 records)
-  x a chain-wide adjustment (if every store's count rises together it is a festival, outage or season, not a
-  store problem);
-* surprise = Poisson tail probability of the observed count, scanned over 1- and 2-week windows, with the
-  baseline ending ``gap_weeks`` before the window so a slow ramp does not hide inside its own baseline;
-* policy issues (safety, hygiene, allergens, food safety, misconduct) get a lower bar, mirroring the escalation
-  policy that one credible report of these already matters;
-* at most ``max_flags_per_week`` flags per week, and a store/issue already escalated is not re-raised during the
-  cooldown, so flag budget goes to new problems.
+For each store and issue type we compare this week's count with the count we'd expect:
+store volume x the store's usual share of that issue (shrunk toward the chain average for small stores)
+x how much the same issue moved at all other stores (so chain-wide spikes don't flag one store).
+The Poisson p-value of the observed count is the score. Safety-type issues get a lower bar, at most
+max_flags_per_week flags are raised, and a flagged store/issue is not flagged again during the cooldown.
 """
 
 from __future__ import annotations
@@ -76,8 +68,8 @@ def window_surprise(cube: CountCube, week: int, window: int, settings: DetectorS
 
     observed = cube.issue[:, :, start : week + 1].sum(axis=2)
     volume = cube.volume[:, start : week + 1].sum(axis=1)
-    # Chain-wide rate this window, leaving the store itself out so its own spike cannot explain itself away;
-    # shrunk toward the historical share so a quiet week elsewhere does not move the expectation.
+    # Rate at all other stores, shrunk toward history. Leaving the store out stops its own spike
+    # from raising its own expected count.
     others_count = observed.sum(axis=0)[None, :] - observed
     others_volume = (volume.sum() - volume)[:, None]
     others_share = (others_count + prior * chain_share) / (others_volume + prior)
@@ -127,7 +119,7 @@ def detect_flags(
         for s, t in sorted(zip(*np.nonzero(np.isfinite(scores)), strict=True), key=lambda c: scores[c]):
             previous = last_flagged.get((s, t))
             if previous is not None and week - previous <= settings.cooldown_weeks:
-                # Still elevated: keep the open escalation alive instead of spending budget on it again.
+                # Still high: keep the existing flag open instead of spending budget on it again.
                 last_flagged[(s, t)] = week
                 continue
             if raised == settings.max_flags_per_week:

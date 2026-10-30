@@ -58,7 +58,7 @@ def train_model(data: PackData, feedback: pd.DataFrame, settings: Settings) -> F
 
 
 def classify_feedback(data: PackData, settings: Settings) -> pd.DataFrame:
-    """Train on the visible labelled sample and label every feedback row in ``data``."""
+    """Train on the labelled records in ``data`` and label every feedback row."""
     feedback = with_stores(data)
     model = train_model(data, feedback, settings)
     return feedback.join(model.predict(feedback, feedback["store"].notna()))
@@ -106,11 +106,10 @@ def detect_week(data_dir: Path, as_of: pd.Timestamp, settings: Settings) -> pd.D
 
 
 def replay_weekly_flags(data: PackData, settings: Settings) -> pd.DataFrame:
-    """Reproduce ``detect_week`` for every week without reloading files.
+    """Same result as running ``detect_week`` for every week, but faster.
 
-    Classification is per row and training is deterministic, so a model trained on the labels visible at week w
-    gives the same labels whether it predicts the truncated or the full stream. The model is retrained only when
-    the visible label set changes; ``flags_as_of`` then hides every row created after week w.
+    Predictions are per row and training is deterministic, so we only retrain when the set of visible
+    labels changes. ``flags_as_of`` hides rows created after each week.
     """
     feedback = with_stores(data)
     weekly = []

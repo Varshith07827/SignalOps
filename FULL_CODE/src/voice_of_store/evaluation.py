@@ -1,7 +1,7 @@
-"""Honest offline evaluation: stratified k-fold cross-validation on the public labelled sample.
+"""5-fold cross-validation on the labelled records.
 
-The official ``evaluate.py`` scores in-sample when run against the training labels (the model has seen them),
-so the out-of-fold numbers here are the ones to quote for expected hidden-split performance.
+evaluate.py scores the training labels with a model that has already seen them, so these
+out-of-fold numbers are the better estimate for the hidden test set.
 """
 
 from __future__ import annotations

@@ -68,7 +68,7 @@ def _context_features(feedback: pd.DataFrame, issue_types: pd.Series, store_know
 
 
 class FeedbackClassifier:
-    """Fit on the public labelled sample, then label any feedback rows."""
+    """Trained on the labelled records, then used to label any feedback rows."""
 
     def __init__(self, settings: ClassifierSettings, taxonomy: pd.DataFrame) -> None:
         self.settings = settings
@@ -98,13 +98,13 @@ class FeedbackClassifier:
         texts = train.feedback["text"].map(normalise)
         text_matrix = self.vectorizer.fit_transform(texts)
         self.issue_model.fit(text_matrix, train.issue_type_id)
-        # Severity/actionable learn from the true issue type; at prediction time they see the predicted one.
+        # Train on the true issue type. At prediction time these models get the predicted one.
         full = sp.hstack(
             [text_matrix, _context_features(train.feedback, train.issue_type_id, train.store_known)]
         ).tocsr()
         self.severity_model.fit(full, train.severity)
         self.actionable_model.fit(full, train.actionable)
-        # The guideline gives identical texts the same issue type, so an exact match is the safest label.
+        # Identical texts always share a label in this dataset, so reuse it for exact matches.
         self.known_texts = dict(zip(texts, train.issue_type_id, strict=True))
         logger.info("Classifier trained on %d labelled records", len(texts))
         return self

@@ -2,9 +2,9 @@
 
     python FULL_CODE/detect.py --feedback <folder>/feedback.csv --as-of YYYY-MM-DD --out <flags.csv>
 
-Reads every input file from the folder that contains --feedback, drops all feedback created after the Sunday of
-the --as-of week before doing anything else, trains the classifier on that folder's labelled sample, and writes
-the flags for the --as-of week only.
+All input files are read from the folder that contains --feedback. Feedback created after the Sunday of the
+--as-of week is dropped first, then the classifier is trained on that folder's labelled records and the flags
+for the --as-of week are written.
 """
 
 from __future__ import annotations

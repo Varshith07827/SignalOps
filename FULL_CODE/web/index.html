@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Voice of Store · Saffron Retail</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap">
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="bar">
+    <div class="brand">
+      <span class="mark" aria-hidden="true"></span>
+      <span class="brand-name">Saffron Retail</span>
+      <span class="product">Voice of Store</span>
+    </div>
+    <form id="upload-form" class="data">
+      <span id="dataset" class="dataset">Loading the R5 dataset...</span>
+      <label class="file">
+        <input id="file" type="file" accept=".csv" required>
+        <span id="file-name">Choose a CSV</span>
+      </label>
+      <button type="submit" class="btn primary">Upload</button>
+      <button type="button" id="show-dataset" class="btn quiet" hidden>Back to R5 dataset</button>
+    </form>
+  </header>
+
+  <p id="notice" class="notice" role="status" hidden></p>
+
+  <main id="content" hidden>
+    <section class="context">
+      <h1 class="headline">
+        <select id="region" aria-label="Region"></select>
+        <span class="joiner">week of</span>
+        <select id="week" aria-label="Week"></select>
+      </h1>
+      <dl class="strip">
+        <div><dt>Messages</dt><dd id="n-messages">-</dd></div>
+        <div><dt>Need action</dt><dd id="n-action">-</dd></div>
+        <div class="is-urgent"><dt>Urgent</dt><dd id="n-urgent">-</dd></div>
+        <div class="is-warning"><dt>Early warnings</dt><dd id="n-warnings">-</dd></div>
+      </dl>
+    </section>
+
+    <div class="layout">
+      <section class="issues-panel" aria-labelledby="top-title">
+        <h2 id="top-title">Top issues to act on</h2>
+        <ol id="top-issues" class="issues"></ol>
+      </section>
+
+      <aside class="rail">
+        <section aria-labelledby="warn-title">
+          <h2 id="warn-title">Early warnings this week</h2>
+          <ul id="warnings-now" class="warnings"></ul>
+          <details class="earlier">
+            <summary id="earlier-summary">Earlier warnings</summary>
+            <ul id="warnings-earlier" class="warnings compact"></ul>
+          </details>
+        </section>
+
+        <section aria-labelledby="teams-title">
+          <h2 id="teams-title">Who must act this week</h2>
+          <ul class="legend" aria-hidden="true">
+            <li><i class="sw critical"></i>Critical</li>
+            <li><i class="sw high"></i>High</li>
+            <li><i class="sw medium"></i>Medium</li>
+            <li><i class="sw low"></i>Low</li>
+          </ul>
+          <ul id="teams" class="teams"></ul>
+        </section>
+
+        <section aria-labelledby="rule-title">
+          <h2 id="rule-title">When to escalate</h2>
+          <ul id="rule" class="rule"></ul>
+        </section>
+      </aside>
+    </div>
+
+    <section class="accuracy-panel" aria-labelledby="eval-title">
+      <div class="accuracy-head">
+        <h2 id="eval-title">Official score</h2>
+        <div class="actions">
+          <a id="download-report" class="btn quiet" href="/api/report" download hidden>Download report</a>
+          <button type="button" id="run-evaluate" class="btn primary">Run evaluate.py</button>
+        </div>
+      </div>
+      <div id="evaluation" class="evaluation">
+        <p class="hint">Scores the files in submission/ against the labelled weeks with the organisers' evaluate.py. Takes a few seconds.</p>
+      </div>
+    </section>
+
+    <section class="accuracy-panel" aria-labelledby="acc-title">
+      <div class="accuracy-head">
+        <h2 id="acc-title">How accurate is it</h2>
+        <button type="button" id="check-accuracy" class="btn quiet">Check accuracy</button>
+      </div>
+      <div id="accuracy" class="accuracy">
+        <p class="hint">Tests the model on labelled messages it has never seen. Takes about 15 seconds.</p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -10,7 +10,7 @@ from voice_of_store.config import BriefSettings
 from voice_of_store.policy import SEVERITY_RANK
 from voice_of_store.routing import escalation_level
 
-# Weight of one unique incident by severity when ranking issues; a critical incident outweighs eight minor ones.
+# How much one incident counts when ranking issues.
 SEVERITY_WEIGHT = {"low": 1.0, "medium": 2.0, "high": 4.0, "critical": 8.0}
 EMERGING_BONUS = 10.0
 TREND_BAND = 0.2
@@ -107,7 +107,7 @@ def _pick_quotes(group: pd.DataFrame, settings: BriefSettings) -> list[str]:
 
 
 def render_markdown(region: str, week_start: pd.Timestamp, items: list[BriefItem]) -> str:
-    """Render one region's brief as Markdown (the format the dashboard and the outputs folder use)."""
+    """Render one region's brief as Markdown (the format of the files in the outputs folder)."""
     week_end = week_start + pd.Timedelta(days=6)
     lines = [
         f"# Voice-of-Store weekly brief: {region}",

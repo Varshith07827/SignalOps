@@ -1,9 +1,25 @@
-# TeamID · R5: Voice-of-Store Engine
+# 1213 · R5: Voice-of-Store Engine
 
 Turns 40k messy, multilingual store-feedback records into a routed, prioritised weekly action list per region,
 and flags store-level problems while they are still small.
 
-> Replace `TeamID` above and in the zip name (`TeamID_R5.zip`) with your team's ID.
+## The problem, as a story
+
+Saffron Retail runs 60 grocery stores across five regions of India, plus an app and a website.\
+Every week about 1,500 messages come in: online reviews, app comments, staff shift notes and call-centre calls.\
+They are written in English, Hinglish, Tamil and Marathi, full of typos, emojis and shop-floor shorthand like "frzr down".\
+Somewhere in that pile, a freezer at one store starts failing: two notes one week, four the next, then five.\
+Nobody at head office notices, because each complaint looks like noise among thousands of others.\
+By the time the chain-wide numbers jump, the ice cream has melted, stock is lost and customers have gone elsewhere.\
+Another week, an app outage brings hundreds of complaints from every store: loud, but not one store's problem.\
+Head office needs to tell these two apart and act on the right one, fast.\
+That is the job of the Voice-of-Store Engine (problem statement R5).\
+It reads every message and decides what it is about, how serious it is, and whether someone can act on it.\
+It sends each problem to the team that owns it (Store Ops, Supply Chain, Merchandising, Digital or HR) with a deadline.\
+Every week it writes a one-page brief per region: top 5 issues, real customer quotes, affected stores and a trend arrow.\
+It raises an early warning when one store gets more of one problem than its size explains, before it spreads.\
+Each warning uses only feedback up to that week's Sunday and cites at least two real messages as proof.\
+So managers stop drowning in chatter and start each week with a short action list they can trust.
 
 ## What it does
 
@@ -49,7 +65,7 @@ Needs Python ≥ 3.11. From the project root (the folder holding this README):
 
 ```bash
 cd FULL_CODE
-uv sync                      # or: pip install numpy pandas scikit-learn scipy streamlit pytest
+uv sync                      # or: pip install numpy pandas scikit-learn scipy fastapi uvicorn python-multipart pytest
 cd ..
 ```
 
@@ -58,18 +74,28 @@ calendar, incident example) into `FULL_CODE/data/`. That folder is git-ignored a
 
 ```bash
 python FULL_CODE/main.py --cv                 # submission/ files, outputs/, briefs, CV report (~2.5 min)
-streamlit run FULL_CODE/app/dashboard.py      # dashboard at http://localhost:8501
+python FULL_CODE/serve.py                     # dashboard at http://127.0.0.1:8000 (--port 8001 if 8000 is busy)
 ```
 
-The dashboard has a week-range selector in the sidebar and these tabs:
+The dashboard is one page (plain HTML/CSS/JavaScript served by a small FastAPI backend). It opens on the
+R5 dataset in `FULL_CODE/data/`. **Upload** analyses another feedback CSV with the same columns as
+`feedback.csv` (for example a newer week of feedback); the model is trained on the dataset's labelled records,
+and stores and taxonomy also come from `FULL_CODE/data/`. **Back to R5 dataset** appears after an upload.
+Pick a week and a region to see:
 
-* **Insights**: what the engine does and how well it works, in plain English, with live numbers and likely
-  jury questions.
-* **Overview, Regional brief, Early warnings, Owner queues, Explorer**: the results for the selected weeks.
-* **Run**: pick a range of weeks and run the weekly detector command for each (it shows the exact commands,
-  and checks every week against the submitted flags file); rebuild everything; or score the submission with
-  the organisers' `evaluate.py` (set `[runner] evaluator_path` in `FULL_CODE/config.toml` to your copy). The
-  commands are fixed argument lists run without a shell; only calendar weeks you pick are passed in.
+* this week's numbers: messages, need action, urgent, early warnings;
+* the region's **top 5 issues**: team, severity, what to do, cases, trend vs last week, stores, two quotes;
+* every **early warning** with the store, problem, team, number of reports and an example message;
+* **who must act this week** (routing by team and severity) and **when to escalate** (the escalation rule);
+* the **official score**: **Run evaluate.py** runs the organisers' scorer on `submission/` against the labelled
+  weeks and shows the primary score, its parts, the early-warning incidents and the precision statement;
+  **Download report** saves the same results (plus the full scorer output) as an HTML file. Set
+  `[evaluation] evaluator_path` in `FULL_CODE/config.toml` if `evaluate.py` is not in `R5_Voice_of_Store_Engine/`;
+* **how accurate it is** (cross-validated scores and the precision statement).
+
+Uploads are checked for type, size (`[server] max_upload_mb`), columns and values before analysis; the server
+listens on 127.0.0.1 only, and data text is shown as plain text, never as HTML. The page uses the Archivo web
+font (Google Fonts) when online and falls back to system fonts offline; everything else is served locally.
 
 `main.py` writes:
 
@@ -80,13 +106,14 @@ The dashboard has a week-range selector in the sidebar and these tabs:
 The detector command (also in `submission/detector_cmd.txt`), run from the project root:
 
 ```bash
-python FULL_CODE/detect.py --feedback FULL_CODE/data/feedback.csv --as-of 2026-07-13 --out week.csv
+python FULL_CODE/detect.py --feedback FULL_CODE/data/feedback.csv --as-of 2026-07-13 --out FULL_CODE/outputs/week.csv
 ```
 
-To score with the pack's scorer (kept outside this repository):
+To score with the organisers' scorer, with the problem pack folder `R5_Voice_of_Store_Engine/` placed in the
+project root (it is git-ignored):
 
 ```bash
-python <pack>/evaluate.py --submission submission/R5_predictions.csv --truth <pack>/data/feedback_labels_train.csv
+python R5_Voice_of_Store_Engine/evaluate.py --submission submission/R5_predictions.csv --truth FULL_CODE/data/feedback_labels_train.csv --feedback FULL_CODE/data/feedback.csv --stores FULL_CODE/data/store_master.csv
 ```
 
 **Environment variables** (optional, see `FULL_CODE/.env.example`): `VOS_CONFIG` points to another settings
@@ -98,11 +125,12 @@ file, `VOS_LOG_LEVEL` sets log verbosity. No secrets, API keys or network access
 cd FULL_CODE && python -m pytest -q
 ```
 
-45 tests on small synthetic fixtures (no pack data needed): severity floor and actionable rules, store
+58 tests on small synthetic fixtures (no pack data needed): severity floor and actionable rules, store
 attribution, language detection, input validation, detector behaviour (small-store spike flagged, chain-wide
-outage ignored, budget, cooldown, no future data), routing, de-duplication, the brief, the classifier, the
-dashboard's command runner (command shape, week validation, exit codes, timeout), and an end-to-end check that
-the full build's flags equal the week-by-week detector's flags. Lint: `ruff check .` and
+outage ignored, budget, cooldown, no future data), routing, de-duplication, the brief, the classifier, upload
+checks, the dashboard API (every section, bad input, upload and reset), running evaluate.py from the
+dashboard (with a stand-in scorer) and the report, and an end-to-end check that the full
+build's flags equal the week-by-week detector's flags. Lint: `ruff check .` and
 `ruff format .` (configured in `pyproject.toml`).
 
 ## Architecture
@@ -112,8 +140,9 @@ FULL_CODE/
 ├── main.py            entry point: full build (submission + outputs + briefs [+ CV])
 ├── detect.py          entry point: one week's flags (the jury re-run command)
 ├── config.toml        every threshold, window, weight and SLA
-├── app/dashboard.py   Streamlit UI entry point (presentation only)
-├── app/views/         insights, analysis tabs, Run tab
+├── serve.py           entry point: web dashboard
+├── api/server.py      FastAPI routes: JSON endpoints, upload, static page (no analysis logic)
+├── web/               dashboard page: index.html, app.js, styles.css (no build step)
 ├── src/voice_of_store/
 │   ├── data_io.py     load + validate the five CSVs from one folder; Monday-week assignment
 │   ├── text.py        normalisation, store-from-locality attribution, language detection
@@ -125,13 +154,15 @@ FULL_CODE/
 │   ├── brief.py       regional top-5 brief, trend arrows, evidence quotes, Markdown rendering
 │   ├── evaluation.py  stratified 5-fold CV and precision statement
 │   ├── pipeline.py    orchestration, causal weekly replay
-│   ├── commands.py    builds and runs the project's commands for the Run tab (no shell, timeouts)
-│   └── reports.py     writes submission, dashboard tables, briefs
+│   ├── service.py     dashboard engine: train once, analyse the R5 dataset or an uploaded CSV
+│   ├── insights.py    plain-English weekly numbers, top issues, early warnings, escalation rule
+│   ├── scoring.py     runs evaluate.py (no shell, with a timeout), summarises it, builds the HTML report
+│   └── reports.py     writes submission, record tables, briefs
 └── tests/
 ```
 
 Flow: `data_io` → `text.resolve_stores` → `classifier` + `policy` → `routing` / `dedup` / `brief` (reports
-and dashboard) and → `detector` (flags).
+and dashboard) and → `detector` (flags). The dashboard: `web/` → `api/server.py` → `service` + `insights`.
 
 ### Classifier
 
@@ -174,17 +205,18 @@ Only actionable records are routed; owners come from the taxonomy's `owner_funct
 ## AI usage
 
 * **In the app:** no LLMs, external APIs or downloaded models. The classifier is trained at run time
-  (scikit-learn) on the public labelled sample in the data folder; nothing is pickled or loaded from disk.
+  (scikit-learn) on the 3,000 labelled records in the data folder; nothing is pickled or loaded from disk.
 * **AI coding assistant:** this solution was built with Claude Code (Anthropic's Claude Opus 5.5), which
   explored the data, prototyped models, wrote the code, tests and this README under the team's direction.
 
 ## Pre-built and third-party code
 
+* This project is released under the MIT licence (see `LICENSE`).
 * Before Day 1 the repository held an earlier proof of concept ("StorePulse") built on self-generated
   synthetic data. It was removed when the official dataset arrived; it remains in git history only and none of
   it is used here.
-* Libraries: numpy, pandas, scikit-learn, scipy, streamlit (BSD/Apache licences), pytest and ruff for
-  development; versions pinned in `FULL_CODE/uv.lock`. `pip-audit` reported no known vulnerabilities.
+* Libraries: numpy, pandas, scikit-learn, scipy, FastAPI, uvicorn, python-multipart (BSD/MIT/Apache
+  licences), pytest and ruff for development; versions pinned in `FULL_CODE/uv.lock`. `pip-audit` reported no known vulnerabilities.
 * No templates, starter kits or copied snippets. The pack's `baseline.py` and `evaluate.py` were read and run
   for comparison but are not included.
 

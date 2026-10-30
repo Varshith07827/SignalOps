@@ -68,11 +68,16 @@ class RoutingSettings:
 
 
 @dataclass(frozen=True)
-class RunnerSettings:
+class EvaluationSettings:
     evaluator_path: Path
-    detect_timeout_seconds: int
-    build_timeout_seconds: int
-    evaluate_timeout_seconds: int
+    timeout_seconds: int
+
+
+@dataclass(frozen=True)
+class ServerSettings:
+    host: str
+    port: int
+    max_upload_mb: int
 
 
 @dataclass(frozen=True)
@@ -83,7 +88,8 @@ class Settings:
     dedup: DedupSettings
     brief: BriefSettings
     routing: RoutingSettings
-    runner: RunnerSettings
+    evaluation: EvaluationSettings
+    server: ServerSettings
 
 
 def load_settings(path: Path | None = None) -> Settings:
@@ -95,8 +101,8 @@ def load_settings(path: Path | None = None) -> Settings:
     paths = raw["paths"]
     detector = dict(raw["detector"])
     detector["scan_windows"] = tuple(int(w) for w in detector["scan_windows"])
-    runner = dict(raw["runner"])
-    runner["evaluator_path"] = (base / runner["evaluator_path"]).resolve()
+    evaluation = dict(raw["evaluation"])
+    evaluation["evaluator_path"] = (base / evaluation["evaluator_path"]).resolve()
     return Settings(
         paths=PathSettings(
             data_dir=(base / paths["data_dir"]).resolve(),
@@ -108,5 +114,6 @@ def load_settings(path: Path | None = None) -> Settings:
         dedup=DedupSettings(**raw["dedup"]),
         brief=BriefSettings(**raw["brief"]),
         routing=RoutingSettings(**raw["routing"]),
-        runner=RunnerSettings(**runner),
+        evaluation=EvaluationSettings(**evaluation),
+        server=ServerSettings(**raw["server"]),
     )

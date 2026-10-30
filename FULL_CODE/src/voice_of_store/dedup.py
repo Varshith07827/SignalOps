@@ -1,8 +1,7 @@
-"""Cross-channel de-duplication (stretch goal): the same real-world incident reported several times counts once.
+"""Merge reports of the same incident that came in through different channels.
 
-Two reports join one incident when they concern the same store and the same predicted issue type and were
-created within ``window_hours`` of the incident's first report. This is deliberately conservative: reports
-without a known store are never merged, because "milk finished again" at two unknown stores are two incidents.
+Reports are merged when they have the same store and issue type and arrive within window_hours of the
+first report. Reports without a known store are never merged.
 """
 
 from __future__ import annotations

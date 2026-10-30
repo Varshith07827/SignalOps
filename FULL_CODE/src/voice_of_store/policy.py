@@ -1,7 +1,7 @@
-"""Annotation-guideline rules that sit on top of the learned models.
+"""Rules from the labelling guideline, applied after the models.
 
-These encode the labelling policy rather than anything learnt: severity is never below the taxonomy's policy
-floor, and a record can only be actionable when it is a real issue that can be routed to an owner.
+Severity is never below the taxonomy's policy floor, and only a real issue that can be routed
+to an owner can be actionable.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import pandas as pd
 from voice_of_store.data_io import NON_ISSUE_TYPES, SEVERITIES
 
 SEVERITY_RANK = {name: rank for rank, name in enumerate(SEVERITIES)}
-# Order, app, payment, refund and loyalty issues are routed to Digital / Supply Chain without a store.
+# Online order, app, payment, refund and loyalty issues don't need a store to be routed.
 STORELESS_ROUTABLE_TYPES = frozenset(f"IT{i}" for i in range(23, 30))
 
 
