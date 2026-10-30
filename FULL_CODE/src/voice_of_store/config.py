@@ -58,6 +58,7 @@ class BriefSettings:
     top_n: int
     quotes_per_issue: int
     quote_max_chars: int
+    solved_after_quiet_weeks: int
 
 
 @dataclass(frozen=True)

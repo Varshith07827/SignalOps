@@ -1,4 +1,4 @@
-"""Write the submission files, the record and flag tables, and the Markdown regional briefs."""
+"""Write the submission files, the routed record table and the Markdown regional briefs."""
 
 from __future__ import annotations
 
@@ -44,10 +44,10 @@ def write_submission(records: pd.DataFrame, flags: pd.DataFrame, folder: Path) -
     logger.info("Wrote %d predictions and %d flags to %s", len(records), len(flags), folder)
 
 
-def write_record_tables(records: pd.DataFrame, flags: pd.DataFrame, folder: Path) -> None:
+def write_records(records: pd.DataFrame, folder: Path) -> None:
+    """Every record with its labels, routing, language and incident id (the routing deliverable)."""
     folder.mkdir(parents=True, exist_ok=True)
     records[RECORD_COLUMNS].to_csv(folder / "records.csv", index=False)
-    flags.to_csv(folder / "flags.csv", index=False)
 
 
 def write_briefs(run: EngineRun, flags: pd.DataFrame, settings: Settings) -> Path:

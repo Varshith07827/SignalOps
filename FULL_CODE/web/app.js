@@ -28,6 +28,15 @@ function notice(message, isError) {
   box.classList.toggle("error", Boolean(isError));
 }
 
+function mondayText(week) {
+  return new Date(`${week}T00:00:00`).toLocaleDateString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 function weekText(week) {
   return new Date(`${week}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
@@ -50,6 +59,7 @@ function showStatus(status) {
   $("dataset").textContent = `${status.rows.toLocaleString()} messages from ${status.dataset}`;
   $("show-dataset").hidden = !status.uploaded;
   fillSelect($("week"), [...status.weeks].reverse(), weekText);
+  fillSelect($("drawer-week"), [...status.weeks].reverse(), mondayText);
   fillSelect($("region"), status.regions, regionText);
   $("content").hidden = false;
 }
@@ -67,6 +77,7 @@ async function loadStatus() {
   }
   notice("");
   showStatus(status);
+  if ($("review-store").options.length === 1) await loadStores();
   await refresh();
 }
 
@@ -85,7 +96,13 @@ function renderTeams(teams) {
   }
   const widest = Math.max(...teams.map((t) => t.total));
   $("teams").replaceChildren(...teams.map((t) => {
-    const row = el("li", null, "team-row");
+    const item = el("li");
+    const row = el("button", null, "team-row");
+    row.type = "button";
+    row.addEventListener("click", () => {
+      const region = $("region").value;
+      openCases(t.team, regionText(region), { team: t.team, region });
+    });
     const label = el("div", null, "label");
     const urgent = t.critical + t.high;
     label.append(el("b", t.team), el("span", `${t.total} to fix${urgent ? `, ${urgent} urgent` : ""}`));
@@ -99,8 +116,84 @@ function renderTeams(teams) {
       track.append(seg);
     });
     row.append(label, track);
-    return row;
+    item.append(row);
+    return item;
   }));
+}
+
+function timeText(stamp) {
+  return new Date(stamp).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+let drawerCases = [];
+let drawerQuery = null;
+let drawerRequest = 0;
+
+function caseItem(c) {
+  const item = el("li", null, `case sev-${c.severity}`);
+  const title = el("div", null, "issue-title");
+  title.append(el("h3", c.problem), el("span", SEVERITY_NAME[c.severity], `pill ${c.severity}`));
+  if (c.early_warning) title.append(el("span", "Early warning", "pill warning"));
+  const action = el("p", null, "action");
+  const team = drawerQuery.filters.team ? "" : ` · ${c.team}`;
+  action.append(el("strong", c.store), el("span", ` · ${c.action}${team}`, "team"));
+  const facts = el("div", null, "facts");
+  const reports = c.reports === 1 ? "1 report" : `${c.reports} reports`;
+  facts.append(
+    el("span", `Reported ${timeText(c.opened)}`),
+    el("span", c.due ? `Due ${timeText(c.due)}` : "No deadline", c.due ? "due" : ""),
+    el("span", `${reports} · ${c.channels.join(", ")}`),
+  );
+  item.append(title, action, facts, el("blockquote", c.quote, "quote"));
+  return item;
+}
+
+function showCases(severity) {
+  const shown = severity ? drawerCases.filter((c) => c.severity === severity) : drawerCases;
+  const empty = drawerCases.length ? "No cases at this level." : "No cases in this week.";
+  $("drawer-cases").replaceChildren(...(shown.length ? shown.map(caseItem) : [el("li", empty, "empty")]));
+  $("drawer-filters").querySelectorAll("button").forEach((b) => {
+    b.setAttribute("aria-pressed", String(b.dataset.severity === (severity || "")));
+  });
+}
+
+function filterChip(label, count, severity) {
+  const chip = el("button", `${label} ${count}`, "chip");
+  chip.type = "button";
+  chip.dataset.severity = severity;
+  chip.disabled = count === 0;
+  chip.addEventListener("click", () => showCases(severity));
+  return chip;
+}
+
+// Opens the case list for a team (from "Who must act") or a store's problem (from the map).
+// It starts on the week picked on the page; the drawer's own week picker then moves it to any other week.
+function openCases(title, scope, filters) {
+  drawerQuery = { filters };
+  $("drawer-title").textContent = title;
+  $("drawer-scope").textContent = scope;
+  $("drawer-week").value = $("week").value;
+  if (!$("cases-dialog").open) $("cases-dialog").showModal();
+  loadCases();
+}
+
+async function loadCases() {
+  const request = ++drawerRequest;
+  $("drawer-filters").replaceChildren();
+  $("drawer-cases").replaceChildren(el("li", "Loading cases...", "empty"));
+  try {
+    const query = new URLSearchParams({ week: $("drawer-week").value, ...drawerQuery.filters });
+    const data = await api(`/api/cases?${query}`);
+    // Ignore an older answer if the week was changed again while it loaded.
+    if (request !== drawerRequest) return;
+    drawerCases = data.cases;
+    const chips = [filterChip("All", drawerCases.length, "")];
+    ["critical", "high", "medium", "low"].forEach((s) => chips.push(filterChip(SEVERITY_NAME[s], data.counts[s], s)));
+    $("drawer-filters").replaceChildren(...chips);
+    showCases("");
+  } catch (error) {
+    if (request === drawerRequest) $("drawer-cases").replaceChildren(el("li", error.message, "error-text"));
+  }
 }
 
 function renderIssues(items) {
@@ -181,6 +274,7 @@ async function refresh() {
     renderWeek(weekData);
     renderIssues(issues);
     renderWarnings();
+    await renderMap($("week").value, $("region").value);
   } catch (error) {
     notice(error.message, true);
   }
@@ -323,6 +417,77 @@ async function loadLastEvaluation() {
   if (last) renderEvaluation(last);
 }
 
+async function loadStores() {
+  const stores = await api("/api/stores");
+  const select = $("review-store");
+  const byRegion = new Map();
+  stores.forEach((s) => {
+    if (!byRegion.has(s.region)) byRegion.set(s.region, []);
+    byRegion.get(s.region).push(s);
+  });
+  byRegion.forEach((list, region) => {
+    const group = document.createElement("optgroup");
+    group.label = `${region} region`;
+    list.forEach((s) => {
+      const option = el("option", s.name);
+      option.value = s.store_id;
+      group.append(option);
+    });
+    select.append(group);
+  });
+}
+
+function clarity(confidence) {
+  if (confidence >= 0.75) return "clear";
+  if (confidence >= 0.55) return "fairly clear";
+  return "unclear, worth a human look";
+}
+
+function renderReview(r) {
+  const title = el("div", null, "result-title");
+  title.append(el("h3", r.problem), el("span", SEVERITY_NAME[r.severity], `pill ${r.severity}`));
+  title.append(el("span", r.needs_action ? "Needs action" : "No action", `pill ${r.needs_action ? "yes" : "no"}`));
+  const parts = [title];
+  if (r.needs_action) {
+    const action = el("p", null, "action");
+    action.append(el("strong", r.action), el("span", ` · ${r.team} · deadline ${r.deadline}`, "team"));
+    parts.push(action);
+  } else {
+    parts.push(el("p", r.reason, "reason"));
+  }
+  parts.push(el("p", `${r.store} · ${r.language} · the call is ${clarity(r.confidence)}`, "meta facts"));
+  $("review-result").replaceChildren(...parts);
+}
+
+async function checkReview(event) {
+  event.preventDefault();
+  const text = $("review-text").value.trim();
+  if (text.length < 3) return;
+  const button = $("review-submit");
+  button.disabled = true;
+  const rating = $("review-rating").value;
+  try {
+    const result = await api("/api/review", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text,
+        channel: $("review-channel").value,
+        store_id: $("review-store").value || null,
+        rating: rating ? Number(rating) : null,
+      }),
+    });
+    renderReview(result);
+    const item = el("li");
+    item.append(el("b", result.problem), ` (${result.severity}): ${text.length > 90 ? `${text.slice(0, 87)}...` : text}`);
+    $("review-history").prepend(item);
+  } catch (error) {
+    $("review-result").replaceChildren(el("p", error.message, "error-text"));
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function uploadFile(event) {
   event.preventDefault();
   const file = $("file").files[0];
@@ -360,9 +525,19 @@ $("file").addEventListener("change", () => {
 $("upload-form").addEventListener("submit", uploadFile);
 $("show-dataset").addEventListener("click", showDataset);
 $("week").addEventListener("change", refresh);
-$("region").addEventListener("change", refresh);
+$("region").addEventListener("change", async () => {
+  await refresh();
+  focusRegion($("region").value);
+});
+$("drawer-week").addEventListener("change", loadCases);
+$("drawer-close").addEventListener("click", () => $("cases-dialog").close());
+$("cases-dialog").addEventListener("click", (event) => {
+  // A click on the dimmed backdrop lands on the dialog itself.
+  if (event.target === $("cases-dialog")) $("cases-dialog").close();
+});
 $("check-accuracy").addEventListener("click", checkAccuracy);
 $("run-evaluate").addEventListener("click", runEvaluate);
+$("review-form").addEventListener("submit", checkReview);
 
 loadRule().catch((error) => notice(error.message, true));
 loadLastEvaluation().catch((error) => notice(error.message, true));

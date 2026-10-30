@@ -13,6 +13,7 @@ from voice_of_store.data_io import REQUIRED_COLUMNS, DataValidationError, load_p
 from voice_of_store.detector import detect_flags
 from voice_of_store.evaluation import cross_validate
 from voice_of_store.pipeline import enrich_records, train_model, week_range, with_stores
+from voice_of_store.text import detect_language
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,32 @@ class Engine:
 
     def analyse_dataset(self) -> Analysis:
         return self.analyse(self.reference.feedback, DATASET_NAME)
+
+    def classify_review(self, text: str, channel: str, store_id: str | None, rating: int | None) -> dict:
+        """Label one new message typed into the dashboard."""
+        now = pd.Timestamp.now().floor("s")
+        row = pd.DataFrame(
+            {
+                "feedback_id": ["NEW"],
+                "channel": [channel],
+                "created_at": [now.strftime("%Y-%m-%dT%H:%M:%S")],
+                "store_id": [store_id or ""],
+                "rating": ["" if rating is None else str(rating)],
+                "text": [text],
+            }
+        )
+        feedback = validate_feedback(row)
+        rows = with_stores(replace(self.reference, feedback=feedback))
+        predicted = self.model.predict(rows, rows["store"].notna()).iloc[0]
+        store = rows["store"].iloc[0]
+        return {
+            "issue_type_id": predicted["issue_type_id"],
+            "severity": predicted["severity"],
+            "actionable": int(predicted["actionable"]),
+            "confidence": float(predicted["issue_confidence"]),
+            "store": store if isinstance(store, str) else None,
+            "language": detect_language(text),
+        }
 
     def quality(self) -> dict[str, float]:
         """5-fold cross-validated scores. Takes about 15 seconds, so it's computed once."""

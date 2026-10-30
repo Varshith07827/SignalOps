@@ -9,11 +9,11 @@ submission_dir = "../submission"
 [classifier]
 seed = 2026
 cv_folds = 5
-# LinearSVC regularisation for the issue-type model (picked with 5-fold cross-validation).
+# LinearSVC regularisation per label, picked with 5-fold cross-validation (higher = fits the training data
+# more closely). Severity and actionable stop improving above 3.
 issue_c = 1.0
-# Logistic regression regularisation for the severity and actionable models.
-severity_c = 5.0
-actionable_c = 5.0
+severity_c = 3.0
+actionable_c = 3.0
 word_ngram_max = 2
 char_ngram_min = 2
 char_ngram_max = 5
@@ -49,6 +49,8 @@ window_hours = 72
 top_n = 5
 quotes_per_issue = 2
 quote_max_chars = 220
+# On the dashboard map, a store's problem counts as solved after this many weeks with no complaints.
+solved_after_quiet_weeks = 2
 
 [evaluation]
 # The organisers' scorer is not part of this repository. It is expected in the problem pack folder

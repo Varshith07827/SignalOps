@@ -1,7 +1,7 @@
 """Record-level classifier: issue type, severity and actionable flag for every feedback row.
 
-Three linear models over the same TF-IDF features (word 1-2 grams + character 2-5 grams, which cope with the
-typos, SMS spellings and code-mixed Hinglish/Tamil/Marathi), followed by the guideline rules in ``policy``.
+Three linear SVMs over the same TF-IDF features (word 1-2 grams + character 2-5 grams, which cope with
+typos, SMS spellings and mixed Hinglish/Tamil/Marathi), followed by the guideline rules in ``policy``.
 """
 
 from __future__ import annotations
@@ -13,7 +13,6 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import FeatureUnion
 from sklearn.svm import LinearSVC
 
@@ -87,11 +86,9 @@ class FeedbackClassifier:
                 ),
             ]
         )
-        self.issue_model = LinearSVC(C=settings.issue_c, class_weight="balanced", random_state=settings.seed)
-        self.severity_model = LogisticRegression(
-            C=settings.severity_c, class_weight="balanced", max_iter=3000, random_state=settings.seed
-        )
-        self.actionable_model = LogisticRegression(C=settings.actionable_c, max_iter=3000, random_state=settings.seed)
+        self.issue_model = _svm(settings.issue_c, settings.seed)
+        self.severity_model = _svm(settings.severity_c, settings.seed)
+        self.actionable_model = _svm(settings.actionable_c, settings.seed)
         self.known_texts: dict[str, str] = {}
 
     def fit(self, train: TrainingFrame) -> FeedbackClassifier:
@@ -135,8 +132,13 @@ class FeedbackClassifier:
         )
 
 
+def _svm(c: float, seed: int) -> LinearSVC:
+    # Balanced class weights, because rare issue types were over-sampled differently from the full stream.
+    return LinearSVC(C=c, class_weight="balanced", random_state=seed)
+
+
 def _margin_confidence(margins: np.ndarray) -> np.ndarray:
-    """Map the gap between the best and runner-up SVM scores to (0, 1); a wide gap means a clear call."""
+    """Turn the gap between the best and second-best class scores into a 0-1 value. Bigger gap, clearer call."""
     top_two = np.sort(margins, axis=1)[:, -2:]
     gap = top_two[:, 1] - top_two[:, 0]
     return np.round(1.0 / (1.0 + np.exp(-4.0 * gap)), 3)

@@ -10,16 +10,27 @@ import threading
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 import pandas as pd
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 from voice_of_store.config import Settings
 from voice_of_store.data_io import DataValidationError
-from voice_of_store.insights import ESCALATION_RULE, early_warnings, region_top_issues, week_label, week_overview
+from voice_of_store.insights import (
+    ESCALATION_RULE,
+    case_list,
+    early_warnings,
+    load_store_locations,
+    region_top_issues,
+    review_result,
+    store_map,
+    week_label,
+    week_overview,
+)
 from voice_of_store.scoring import EvaluationError, EvaluationResult, render_report, run_evaluation
 from voice_of_store.service import Analysis, Engine, UploadError, parse_feedback_upload
 
@@ -27,15 +38,26 @@ logger = logging.getLogger(__name__)
 
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"
 SECURITY_HEADERS = {
-    # Google Fonts is the only outside source (the Archivo font). Without internet the page uses system fonts.
+    # Outside sources: Google Fonts (Archivo), Leaflet from unpkg and Esri map tiles. Without internet the page
+    # falls back to system fonts and hides the map.
     "Content-Security-Policy": (
-        "default-src 'self'; script-src 'self'; img-src 'self' data:; "
-        "style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com"
+        "default-src 'self'; script-src 'self' https://unpkg.com; "
+        "img-src 'self' data: https://server.arcgisonline.com; "
+        "style-src 'self' https://fonts.googleapis.com https://unpkg.com; font-src https://fonts.gstatic.com"
     ),
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "no-referrer",
 }
+
+
+class NewReview(BaseModel):
+    """A message typed into the dashboard's "Check a new review" form."""
+
+    text: str = Field(min_length=3, max_length=2000)
+    channel: Literal["online_review", "in_app", "staff_shift_note", "call_centre_ticket"]
+    store_id: str | None = Field(default=None, max_length=20)
+    rating: int | None = Field(default=None, ge=1, le=5)
 
 
 class DashboardState:
@@ -97,6 +119,7 @@ def create_app(settings: Settings, make_engine: Callable[[], Engine] | None = No
     state = DashboardState()
     build = make_engine or (lambda: Engine(settings))
     max_bytes = settings.server.max_upload_mb * 1024 * 1024
+    locations = load_store_locations()
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -154,6 +177,38 @@ def create_app(settings: Settings, make_engine: Callable[[], Engine] | None = No
             _region(current, region)
         return week_overview(current, _week(current, week), region)
 
+    @app.get("/api/cases")
+    def cases(
+        week: str,
+        team: str | None = None,
+        region: str | None = None,
+        store: str | None = None,
+        issue: str | None = None,
+    ) -> dict:
+        engine, current = _ready(state)
+        data = engine.reference
+        if region is not None:
+            _region(current, region)
+        if team is not None and team not in set(data.taxonomy["owner_function"]):
+            raise HTTPException(400, "Pick a team from the list.")
+        if store is not None and store not in set(data.stores["store_id"]):
+            raise HTTPException(400, "Pick a store from the list.")
+        if issue is not None and issue not in data.taxonomy.index:
+            raise HTTPException(400, "Pick a problem from the list.")
+        picked = _week(current, week)
+        quote_chars = settings.brief.quote_max_chars
+        return case_list(
+            current, picked, data.taxonomy, data.stores, quote_chars, team=team, region=region, store=store,
+            issue_type_id=issue,
+        )  # fmt: skip
+
+    @app.get("/api/map")
+    def map_pins(week: str) -> list[dict]:
+        engine, current = _ready(state)
+        data = engine.reference
+        quiet_weeks = settings.brief.solved_after_quiet_weeks
+        return store_map(current, _week(current, week), data.taxonomy, data.stores, locations, quiet_weeks)
+
     @app.get("/api/top-issues")
     def top_issues(region: str, week: str) -> list[dict]:
         engine, current = _ready(state)
@@ -166,6 +221,26 @@ def create_app(settings: Settings, make_engine: Callable[[], Engine] | None = No
         engine, current = _ready(state)
         data = engine.reference
         return early_warnings(current, data.taxonomy, data.stores, settings.brief.quote_max_chars)
+
+    @app.get("/api/stores")
+    def stores() -> list[dict]:
+        engine, _ = _ready(state)
+        table = engine.reference.stores.sort_values(["region", "store_name"])
+        return [
+            {"store_id": r.store_id, "name": r.store_name, "region": r.region} for r in table.itertuples(index=False)
+        ]
+
+    @app.post("/api/review")
+    def check_review(review: NewReview) -> dict:
+        engine, _ = _ready(state)
+        text = review.text.strip()
+        if len(text) < 3:
+            raise HTTPException(400, "Type at least a few words.")
+        data = engine.reference
+        if review.store_id and review.store_id not in set(data.stores["store_id"]):
+            raise HTTPException(400, "Pick a store from the list.")
+        label = engine.classify_review(text, review.channel, review.store_id, review.rating)
+        return review_result(label, data.taxonomy, data.stores, settings.routing)
 
     @app.get("/api/escalation-rule")
     def escalation_rule() -> list[dict]:

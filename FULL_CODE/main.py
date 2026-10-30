@@ -19,7 +19,7 @@ from voice_of_store.config import load_settings  # noqa: E402
 from voice_of_store.data_io import DataValidationError  # noqa: E402
 from voice_of_store.evaluation import cross_validate  # noqa: E402
 from voice_of_store.pipeline import replay_weekly_flags, run_engine  # noqa: E402
-from voice_of_store.reports import write_briefs, write_record_tables, write_submission  # noqa: E402
+from voice_of_store.reports import write_briefs, write_records, write_submission  # noqa: E402
 
 logger = logging.getLogger("main")
 
@@ -42,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
     flags = replay_weekly_flags(run.data, settings)
 
     write_submission(run.records, flags, settings.paths.submission_dir)
-    write_record_tables(run.records, flags, settings.paths.outputs_dir)
+    write_records(run.records, settings.paths.outputs_dir)
     write_briefs(run, flags, settings)
     if args.cv:
         report = cross_validate(run.data, settings)

@@ -3,121 +3,93 @@
 Turns 40k messy, multilingual store-feedback records into a routed, prioritised weekly action list per region,
 and flags store-level problems while they are still small.
 
-## The problem, as a story
-
-Saffron Retail runs 60 grocery stores across five regions of India, plus an app and a website.\
-Every week about 1,500 messages come in: online reviews, app comments, staff shift notes and call-centre calls.\
-They are written in English, Hinglish, Tamil and Marathi, full of typos, emojis and shop-floor shorthand like "frzr down".\
-Somewhere in that pile, a freezer at one store starts failing: two notes one week, four the next, then five.\
-Nobody at head office notices, because each complaint looks like noise among thousands of others.\
-By the time the chain-wide numbers jump, the ice cream has melted, stock is lost and customers have gone elsewhere.\
-Another week, an app outage brings hundreds of complaints from every store: loud, but not one store's problem.\
-Head office needs to tell these two apart and act on the right one, fast.\
-That is the job of the Voice-of-Store Engine (problem statement R5).\
-It reads every message and decides what it is about, how serious it is, and whether someone can act on it.\
-It sends each problem to the team that owns it (Store Ops, Supply Chain, Merchandising, Digital or HR) with a deadline.\
-Every week it writes a one-page brief per region: top 5 issues, real customer quotes, affected stores and a trend arrow.\
-It raises an early warning when one store gets more of one problem than its size explains, before it spreads.\
-Each warning uses only feedback up to that week's Sunday and cites at least two real messages as proof.\
-So managers stop drowning in chatter and start each week with a short action list they can trust.
-
 ## What it does
 
-Saffron Retail's head office receives online reviews, in-app comments, staff shift notes and call-centre
-transcripts in English, Hinglish, transliterated Tamil and Marathi. The engine:
+### Problem statement (R5)
 
-1. **Classifies every record**: issue type (30 operational types + 3 non-issues), severity (low → critical)
-   and an actionable flag.
-2. **Routes** every actionable record to its owning function (Store Ops, Supply Chain, Merchandising, Digital,
-   HR) with an escalation tier and response SLA.
-3. **Detects emerging issues**: a weekly, causal detector that flags a (store, issue) pair that is small in
-   absolute volume but rising sharply, *before* the chain-wide count would show it.
-4. **De-duplicates** the same incident reported through several channels (stretch goal), so briefs count
-   incidents, not messages.
-5. **Writes a one-page brief per region per week**: top 5 issues, owner, severity, escalation, evidence quotes,
-   affected stores and a trend arrow against last week.
+Saffron Retail, a grocery chain with 60 stores in five regions of India, receives about 1,500 feedback
+messages a week: online reviews, app comments, staff shift notes and call-centre transcripts. They are in
+English, Hinglish, transliterated Tamil and Marathi, with typos, emojis and shorthand. Real store problems
+(a broken freezer, a mislabelled allergen, a rude billing counter) are buried in this noise and reach head
+office weeks late.
 
-Users: regional managers and function heads read the briefs and owner queues in the dashboard; the
-emerging-issue flags go to the regional manager.
+The task is to turn this feedback into a prioritised weekly action list routed to the right owner:
 
-## Results
+* label every message with an issue type, a severity and whether someone can act on it;
+* route each issue to its owning team with a severity and a stated escalation rule;
+* flag an issue that is small in volume but rising sharply at one store, before it shows up chain-wide,
+  using only feedback up to that week's Sunday and citing at least two messages as evidence;
+* write a one-page brief per region each week: top 5 issues, evidence quotes, affected stores and a trend
+  arrow against last week;
+* report a score from the organisers' `evaluate.py` and a precision statement (of the issues escalated, how
+  many were truly actionable).
+
+The data has 39,769 messages over 26 weeks, with labels for 3,000 messages from the first 13 weeks.
+
+### What the engine does
+
+1. **Classifies** every record: issue type (IT01–IT30, NI01–NI03), severity (low to critical) and actionable (0/1).
+2. **Routes** every actionable record to its owning team with an escalation level and deadline.
+3. **Detects emerging issues** week by week, using only feedback up to that week's Sunday.
+4. **De-duplicates** the same incident reported through several channels (stretch goal).
+5. **Writes a one-page brief per region per week**: top 5 issues, owner, severity, quotes, stores, trend arrow.
+
+**Users:** regional managers and team heads. They use the dashboard: the week's numbers, the region's top 5
+issues, early warnings, each team's case list with deadlines, a map of all stores, a form to check a new
+review, and buttons to run `evaluate.py` and the accuracy check.
+
+### Results
 
 | | This engine | Pack baseline |
 |---|---|---|
-| Classification, **5-fold cross-validated** (official formula) | **0.939** | 0.579 |
-| — issue-type macro-F1 / severity weighted-F1 / actionable F1 | 0.934 / 0.926 / 0.963 | 0.559 / 0.448 / 0.751 |
-| Lead score on the public worked example (EX-1) | 0.667 (+2 weeks, flag 2026-05-04) | 0.333 (+0) |
-| Flags per week (budget 3) | 1.15 (train half), 1.85 (test half) | 2.08 |
-| `evaluate.py` primary score vs training labels | 0.866 | 0.481 |
+| Classification, 5-fold cross-validated | **0.945** | 0.579 |
+| Issue type / severity / actionable F1 | 0.934 / 0.941 / 0.970 | 0.559 / 0.448 / 0.751 |
+| Lead on the public example EX-1 | +2 weeks (lead score 0.667) | +0 (0.333) |
+| Flags per week (limit 3) | 1.15 | 2.08 |
+| `evaluate.py` primary score on the training labels | 0.867 | 0.481 |
 
-The `evaluate.py` run scores the training labels in-sample (classification 0.999), so the **cross-validated
-0.939 is the honest estimate** for the hidden split. The best possible lead on EX-1 is +3, but that needs a
-flag in the onset week, which held only one report at the store (the evidence rule needs two).
+`evaluate.py` scores the training labels, which the model was trained on, so its classification part is 1.000.
+The cross-validated 0.945 is the honest estimate for the hidden weeks.
 
-**Precision statement** (out-of-fold, 5-fold CV on the 3,000 labelled records): of the records we marked
-actionable, **96.0%** truly were (1,785 marked); of those we marked actionable *and* high/critical (our
-escalations), **95.6%** were truly actionable (410 escalated). The in-sample figures from `evaluate.py`
-(99.8% / 99.8%) are optimistic.
+**Precision statement** (5-fold cross-validation on the 3,000 labelled records): of the records we marked
+actionable, **97.0%** truly were (1,777 marked). Of those we also marked high or critical (our escalations),
+**97.4%** were truly actionable (416 escalated).
 
 ## How to run
 
-Needs Python ≥ 3.11. From the project root (the folder holding this README):
+Needs Python 3.11 or newer. From the project root:
 
 ```bash
-cd FULL_CODE
-uv sync                      # or: pip install numpy pandas scikit-learn scipy fastapi uvicorn python-multipart pytest
-cd ..
+cd FULL_CODE && uv sync && cd ..
 ```
 
-**Where to put the data:** copy the pack's `data/*.csv` files (feedback, labels, store master, taxonomy, week
-calendar, incident example) into `FULL_CODE/data/`. That folder is git-ignored and never committed.
+Without uv: `pip install numpy pandas scikit-learn scipy fastapi uvicorn python-multipart pytest ruff`.
+
+**Data:** copy the pack's `data/*.csv` files into `FULL_CODE/data/` (git-ignored, never committed).
 
 ```bash
-python FULL_CODE/main.py --cv                 # submission/ files, outputs/, briefs, CV report (~2.5 min)
-python FULL_CODE/serve.py                     # dashboard at http://127.0.0.1:8000 (--port 8001 if 8000 is busy)
+python FULL_CODE/main.py --cv     # writes submission/, FULL_CODE/outputs/ (records, briefs, CV report)
+python FULL_CODE/serve.py         # dashboard at http://127.0.0.1:8000 (add --port 8001 if 8000 is busy)
 ```
 
-The dashboard is one page (plain HTML/CSS/JavaScript served by a small FastAPI backend). It opens on the
-R5 dataset in `FULL_CODE/data/`. **Upload** analyses another feedback CSV with the same columns as
-`feedback.csv` (for example a newer week of feedback); the model is trained on the dataset's labelled records,
-and stores and taxonomy also come from `FULL_CODE/data/`. **Back to R5 dataset** appears after an upload.
-Pick a week and a region to see:
-
-* this week's numbers: messages, need action, urgent, early warnings;
-* the region's **top 5 issues**: team, severity, what to do, cases, trend vs last week, stores, two quotes;
-* every **early warning** with the store, problem, team, number of reports and an example message;
-* **who must act this week** (routing by team and severity) and **when to escalate** (the escalation rule);
-* the **official score**: **Run evaluate.py** runs the organisers' scorer on `submission/` against the labelled
-  weeks and shows the primary score, its parts, the early-warning incidents and the precision statement;
-  **Download report** saves the same results (plus the full scorer output) as an HTML file. Set
-  `[evaluation] evaluator_path` in `FULL_CODE/config.toml` if `evaluate.py` is not in `R5_Voice_of_Store_Engine/`;
-* **how accurate it is** (cross-validated scores and the precision statement).
-
-Uploads are checked for type, size (`[server] max_upload_mb`), columns and values before analysis; the server
-listens on 127.0.0.1 only, and data text is shown as plain text, never as HTML. The page uses the Archivo web
-font (Google Fonts) when online and falls back to system fonts offline; everything else is served locally.
-
-`main.py` writes:
-
-* `submission/R5_predictions.csv`, `submission/R5_emerging_flags.csv`, `submission/detector_cmd.txt`;
-* `FULL_CODE/outputs/records.csv` (every record with predictions, routing, language, incident id),
-  `flags.csv`, `briefs/<week>/<region>.md` and `cv_report.json`.
-
-The detector command (also in `submission/detector_cmd.txt`), run from the project root:
+Detector for one week (the command in `submission/detector_cmd.txt`), run from the project root:
 
 ```bash
 python FULL_CODE/detect.py --feedback FULL_CODE/data/feedback.csv --as-of 2026-07-13 --out FULL_CODE/outputs/week.csv
 ```
 
-To score with the organisers' scorer, with the problem pack folder `R5_Voice_of_Store_Engine/` placed in the
-project root (it is git-ignored):
+It reads every data file from the folder that holds `--feedback`, so it also runs on a disguised copy of the data.
+
+Official scorer, with the pack folder `R5_Voice_of_Store_Engine/` in the project root (git-ignored), or the
+**Run evaluate.py** button in the dashboard:
 
 ```bash
 python R5_Voice_of_Store_Engine/evaluate.py --submission submission/R5_predictions.csv --truth FULL_CODE/data/feedback_labels_train.csv --feedback FULL_CODE/data/feedback.csv --stores FULL_CODE/data/store_master.csv
 ```
 
-**Environment variables** (optional, see `FULL_CODE/.env.example`): `VOS_CONFIG` points to another settings
-file, `VOS_LOG_LEVEL` sets log verbosity. No secrets, API keys or network access are needed.
+**Settings:** every threshold, window, weight and deadline is in `FULL_CODE/config.toml`.
+**Environment variables** (optional, see `FULL_CODE/.env.example`): `VOS_CONFIG` (another settings file) and
+`VOS_LOG_LEVEL`. No secrets or API keys are needed.
 
 ## How to run the tests
 
@@ -125,116 +97,115 @@ file, `VOS_LOG_LEVEL` sets log verbosity. No secrets, API keys or network access
 cd FULL_CODE && python -m pytest -q
 ```
 
-58 tests on small synthetic fixtures (no pack data needed): severity floor and actionable rules, store
-attribution, language detection, input validation, detector behaviour (small-store spike flagged, chain-wide
-outage ignored, budget, cooldown, no future data), routing, de-duplication, the brief, the classifier, upload
-checks, the dashboard API (every section, bad input, upload and reset), running evaluate.py from the
-dashboard (with a stand-in scorer) and the report, and an end-to-end check that the full
-build's flags equal the week-by-week detector's flags. Lint: `ruff check .` and
-`ruff format .` (configured in `pyproject.toml`).
+64 tests on small synthetic data (the pack is not needed). Lint and format: `ruff check .` and `ruff format .`.
 
 ## Architecture
 
-```
-FULL_CODE/
-├── main.py            entry point: full build (submission + outputs + briefs [+ CV])
-├── detect.py          entry point: one week's flags (the jury re-run command)
-├── config.toml        every threshold, window, weight and SLA
-├── serve.py           entry point: web dashboard
-├── api/server.py      FastAPI routes: JSON endpoints, upload, static page (no analysis logic)
-├── web/               dashboard page: index.html, app.js, styles.css (no build step)
-├── src/voice_of_store/
-│   ├── data_io.py     load + validate the five CSVs from one folder; Monday-week assignment
-│   ├── text.py        normalisation, store-from-locality attribution, language detection
-│   ├── classifier.py  TF-IDF (word 1–2 + char 2–5 grams) → LinearSVC issue type, LogReg severity/actionable
-│   ├── policy.py      guideline rules: severity floor, actionable requires a real, routable issue
-│   ├── detector.py    store × issue weekly surprise test (details below)
-│   ├── routing.py     owner + escalation rule + SLA
-│   ├── dedup.py       cross-channel incident clustering
-│   ├── brief.py       regional top-5 brief, trend arrows, evidence quotes, Markdown rendering
-│   ├── evaluation.py  stratified 5-fold CV and precision statement
-│   ├── pipeline.py    orchestration, causal weekly replay
-│   ├── service.py     dashboard engine: train once, analyse the R5 dataset or an uploaded CSV
-│   ├── insights.py    plain-English weekly numbers, top issues, early warnings, escalation rule
-│   ├── scoring.py     runs evaluate.py (no shell, with a timeout), summarises it, builds the HTML report
-│   └── reports.py     writes submission, record tables, briefs
-└── tests/
+```mermaid
+flowchart LR
+    data[("FULL_CODE/data/<br/>pack CSVs")] --> io["data_io<br/>load and validate"]
+    io --> text["text<br/>clean text, find store,<br/>language"]
+    text --> clf["classifier + policy<br/>issue, severity, actionable"]
+    clf --> route["routing<br/>owner, escalation, deadline"]
+    clf --> dedup["dedup<br/>merge same incident"]
+    clf --> det["detector<br/>weekly early warnings"]
+    route --> brief["brief<br/>top 5 per region"]
+    dedup --> brief
+    det --> brief
+    clf --> pred[("submission/<br/>R5_predictions.csv")]
+    det --> flags[("submission/<br/>R5_emerging_flags.csv")]
+    brief --> out[("outputs/<br/>briefs, records.csv")]
 ```
 
-Flow: `data_io` → `text.resolve_stores` → `classifier` + `policy` → `routing` / `dedup` / `brief` (reports
-and dashboard) and → `detector` (flags). The dashboard: `web/` → `api/server.py` → `service` + `insights`.
+The three entry points share the same core. The web layer holds no analysis logic.
 
-### Classifier
+```mermaid
+flowchart TB
+    main["main.py<br/>full build"] --> pipe["pipeline.py"]
+    detect["detect.py<br/>one week, causal"] --> pipe
+    web["web/<br/>index.html, app.js, map.js"] -- JSON --> api["api/server.py<br/>FastAPI routes + input checks"]
+    serve["serve.py"] --> api
+    api --> svc["service.py + insights.py<br/>dashboard views"]
+    api --> scoring["scoring.py<br/>runs evaluate.py"]
+    svc --> pipe
+    pipe --> core["data_io · text · classifier · policy<br/>routing · dedup · detector · brief"]
+    config["config.toml"] -.-> core
+```
 
-One TF-IDF representation with character n-grams copes with typos, SMS spellings, emojis and code-mixing
-without a translation step. Severity and actionable models add channel, issue type, "store known" and
-specificity cues (digits, length). Guideline rules sit on top: severity is never below the taxonomy floor
-(safety, hygiene, allergens, food safety and misconduct are at least high; failed payments at least medium);
-praise/chatter/spam is never actionable; an issue without a known store is actionable only for order, app,
-payment, refund and loyalty types (IT23–IT29). Identical texts reuse their training label, as the annotation
-guideline gives identical texts the same type.
+How one week's flags are made, by `detect.py` and, week by week, by `main.py`:
 
-### Emerging-issue detector
+```mermaid
+flowchart LR
+    a["--as-of date"] --> b["drop feedback created<br/>after that Sunday"]
+    b --> c["train the classifier on<br/>labels still visible"]
+    c --> d["expected count per store<br/>and issue, from the store's<br/>history and chain-wide trend"]
+    d --> e["surprise test over<br/>1- and 2-week windows"]
+    e --> f["at most 3 flags,<br/>4-week cooldown,<br/>at least 2 evidence ids"]
+```
 
-For each (store, issue type, week): expected count = the store's feedback volume × the store's historical share
-of that issue (shrunk toward the chain-wide mix, so small Express stores are not judged on two records) × a
-chain-wide adjustment (if every store rises together it is a festival, outage or monsoon, not a store
-problem). Surprise is the Poisson tail probability over 1- and 2-week windows, with a 2-week gap before the
-window so a slow ramp does not hide in its own baseline. Policy issues get a 10× lower bar and need 2 reports
-(others need 3). At most 3 flags a week; a store/issue already flagged is not re-raised for 4 weeks while it
-stays elevated. Each flag cites every same-week, same-store record of that predicted type.
+| Part | Job |
+|---|---|
+| `main.py`, `detect.py`, `serve.py` | Entry points: full build, one week's flags, dashboard |
+| `config.toml` | All settings |
+| `api/server.py` | FastAPI routes, input checks, security headers |
+| `web/` | Dashboard page: plain HTML, CSS and JavaScript, no build step |
+| `src/voice_of_store/` | Core logic, one module per job (see the first diagram) plus `service`, `insights`, `scoring`, `evaluation` (cross-validation), `reports` (writes files) and `store_locations.csv` (map) |
+| `tests/` | pytest suite |
 
-**No future data.** `detect.py` drops every feedback row created after the as-of Sunday before doing anything
-else, trains the classifier only on labelled records among the remaining rows, and replays the weeks up to the
-as-of week. `main.py` produces `R5_emerging_flags.csv` with the same procedure (retraining whenever the visible
-label set changes); running `detect.py` for all 26 weeks reproduces the submitted file exactly. No dates, week
-numbers or ids are hard-coded; every input is read from the folder holding `--feedback`.
+**Classifier.** TF-IDF over words (1–2 grams) and characters (2–5 grams) copes with typos, emojis and mixed
+languages without translation. Three linear SVMs predict issue type, severity and actionable. The guideline
+rules sit on top: severity is never below the taxonomy floor, praise and spam are never actionable, and an
+issue with no known store is actionable only for order, app, payment, refund and loyalty types (IT23–IT29).
+Logistic regression, Ridge, naive Bayes, SGD and LightGBM were also tried. Ridge scored slightly higher in
+cross-validation (0.954); the team kept linear SVMs.
 
-### Routing and escalation rule
+**Detector.** For each store, issue and week, the expected count is the store's feedback volume times its own
+history for that issue (pulled toward the chain average for small stores) times the chain-wide change, so an
+outage or festival that hits every store is not flagged. A Poisson test flags counts far above that. Safety
+and hygiene issues need fewer reports. Each flag cites every same-week, same-store record of that issue.
 
-| Condition | Action | SLA |
+**No future data.** `detect.py` drops every row created after the as-of Sunday before training or detecting.
+`main.py` builds `R5_emerging_flags.csv` the same way, week by week; running `detect.py` for all 26 weeks gives
+the same file. No dates, week numbers or ids are hard-coded.
+
+**Escalation rule.** Only actionable records are routed, to the team in the taxonomy's `owner_function`.
+
+| Condition | Action | Deadline |
 |---|---|---|
-| severity critical (injury, illness, allergic reaction, assault, harassment) | escalate to the owning function's head | 24 h |
-| emerging-issue flag at a store | escalate to the regional manager + owner | 24–72 h by severity |
-| severity high | owning function acts | 72 h |
-| severity medium | owning function's weekly queue | 7 days |
-| severity low | weekly brief only | — |
-
-Only actionable records are routed; owners come from the taxonomy's `owner_function`.
+| Critical (injury, illness, allergic reaction, assault) | Head of the owning team | 24 h |
+| Early warning at a store | Regional manager and the owning team | 24–72 h |
+| High | Owning team | 72 h |
+| Medium | Owning team's weekly queue | 7 days |
+| Low | Weekly brief only | — |
 
 ## AI usage
 
-* **In the app:** no LLMs, external APIs or downloaded models. The classifier is trained at run time
-  (scikit-learn) on the 3,000 labelled records in the data folder; nothing is pickled or loaded from disk.
-* **AI coding assistant:** this solution was built with Claude Code (Anthropic's Claude Opus 5.5), which
-  explored the data, prototyped models, wrote the code, tests and this README under the team's direction.
+* **In the app:** no LLMs, external APIs or downloaded models. The classifier is trained at run time with
+  scikit-learn on the labelled records in the data folder; nothing is pickled or loaded from disk.
+* **AI coding assistant:** built with Claude Code (Anthropic's Claude Opus 5.5), which explored the data,
+  wrote the code, tests and this README under the team's direction.
 
 ## Pre-built and third-party code
 
-* This project is released under the MIT licence (see `LICENSE`).
-* Before Day 1 the repository held an earlier proof of concept ("StorePulse") built on self-generated
-  synthetic data. It was removed when the official dataset arrived; it remains in git history only and none of
-  it is used here.
-* Libraries: numpy, pandas, scikit-learn, scipy, FastAPI, uvicorn, python-multipart (BSD/MIT/Apache
-  licences), pytest and ruff for development; versions pinned in `FULL_CODE/uv.lock`. `pip-audit` reported no known vulnerabilities.
-* No templates, starter kits or copied snippets. The pack's `baseline.py` and `evaluate.py` were read and run
-  for comparison but are not included.
+* MIT licence (see `LICENSE`).
+* Before Day 1 the repository held a proof of concept ("StorePulse") on self-generated data. It was removed
+  when the official dataset arrived and none of it is used.
+* Python libraries: numpy, pandas, scikit-learn, scipy, FastAPI, uvicorn, python-multipart, pytest, ruff
+  (BSD, MIT and Apache licences), pinned in `FULL_CODE/uv.lock`. `pip-audit` found no known vulnerabilities.
+* In the browser: Leaflet 1.9.4 (BSD-2-Clause) from unpkg with a pinned version and integrity hash, map
+  tiles © Esri, and the Archivo font from Google Fonts (SIL Open Font License).
+* No templates, starter kits or copied snippets. The pack's `baseline.py` and `evaluate.py` were run for
+  comparison and are not included.
 
 ## Limitations
 
-* **Hidden incidents are unknown.** Detector settings were chosen on the one public example (EX-1) and kept
-  general; a plain read of the unlabelled test weeks shows two clear single-store ramps that the detector
-  flags 2–3 weeks before a naive chain-wide count would, but multi-store incidents (e.g. one mislabelled
-  product reported thinly at many stores, often without a store id) are detected late or only at one store.
-* Flag precision is modest: most flags are statistically real but small bumps (13 of the 15 flags in the
-  public half do not match the one known incident). The 3-per-week budget keeps this manageable.
-* In the first weeks the detector's classifier sees only a few labelled records, so its evidence labels can
-  differ from the final predictions file (2 train-half flags fail evaluate.py's own-label check). From week 14
-  on, every label is visible and this cannot happen.
-* Severity is the weakest label (weighted-F1 0.93); critical vs high is confused most often.
-* Store attribution from text uses exact locality names; misspelt localities stay unattributed.
-* Language detection is a marker-word heuristic used for display, not for modelling.
-* De-duplication is conservative (same store, same predicted type, 72 h); reports without a store are never
-  merged.
-* Next steps: product-level clustering for multi-store incidents, active learning on low-confidence records,
-  and a feedback loop from owners closing cases.
+* The hidden incidents are unknown. Detector settings were chosen on the one public example. Incidents
+  spread thinly over many stores (for example one mislabelled product) are caught late or at one store only.
+* Most flags are real but small rises: 13 of the 15 flags in the labelled weeks are not the known incident.
+* In the first weeks few labels are visible, so 2 early flags fail `evaluate.py`'s own-label check.
+* Severity is the weakest label (F1 0.94); critical and high are confused most often.
+* A store is found in the text only by its exact locality name; misspellings are missed.
+* Map locations are approximate (the dataset gives only the city), the map needs internet, and "last
+  solved" means the complaints stopped, since the data has no record of fixes.
+* Next steps: detect multi-store product incidents, ask a human to label unsure records, and let teams close
+  cases so fixes can be checked.
