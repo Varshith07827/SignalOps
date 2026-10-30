@@ -1,34 +1,41 @@
-# Virtual environments
+# Problem pack and its data: never committed (see README "Where to put the data")
+data/
+FULL_CODE/data/
+models/
+FULL_CODE/models/
+FULL_CODE/outputs/
+R5_Voice_of_Store_Engine/
+*.pdf
+score.json
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
 .venv/
 venv/
-env/
-
-# Python caches
 __pycache__/
 *.py[cod]
 .pytest_cache/
-.mypy_cache/
 .ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+build/
+dist/
+*.egg-info/
 
-# Generated synthetic data and runtime state (recreate with `python -m src.pipeline`)
-data/generated/*
-!data/generated/.gitkeep
-data/state/*
-!data/state/.gitkeep
-artifacts/*
-!artifacts/.gitkeep
-*.duckdb
-*.duckdb.wal
-
-# Secrets / local config
-.env
-.env.*
-.streamlit/secrets.toml
+# JavaScript (none used, listed per the coding guidelines)
+node_modules/
 
 # OS / editor
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
-*.tmp
 *.log
+*.tmp
+
+# Local tool settings
+.claude/

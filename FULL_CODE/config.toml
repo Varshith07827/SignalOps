@@ -1,0 +1,58 @@
+# Voice-of-Store Engine settings. Every threshold the pipeline uses lives here.
+# Paths are relative to this file's folder (FULL_CODE/).
+
+[paths]
+data_dir = "data"
+outputs_dir = "outputs"
+submission_dir = "../submission"
+
+[classifier]
+seed = 2026
+cv_folds = 5
+# LinearSVC regularisation for the issue-type model (picked by 5-fold CV on the labelled sample).
+issue_c = 1.0
+# Logistic regression regularisation for the severity and actionable models.
+severity_c = 5.0
+actionable_c = 5.0
+word_ngram_max = 2
+char_ngram_min = 2
+char_ngram_max = 5
+char_min_df = 2
+
+[detector]
+# Pseudo-records of chain-wide mix mixed into each store's baseline (empirical-Bayes shrinkage).
+prior_strength = 30.0
+# Weeks of history used for the baseline, and the gap left between baseline and the tested window
+# so a slow ramp does not leak into its own baseline.
+history_weeks = 10
+gap_weeks = 2
+min_history_weeks = 3
+# Windows (in weeks) scanned for a rise; the smallest p-value wins.
+scan_windows = [1, 2]
+# A chain-wide rise of the same issue raises every store's expectation (festival, outage, monsoon).
+chain_ratio_min = 1.0
+chain_ratio_max = 5.0
+# Minimum records this week at the store: the evidence rule needs 2; non-policy issues need 3.
+min_count_policy = 2
+min_count_other = 3
+# Policy issues (floor = high: safety, hygiene, allergens, food safety, misconduct) get a lower bar.
+policy_weight = 10.0
+p_value_threshold = 1e-4
+max_flags_per_week = 3
+# An open escalation is not re-raised for the same store and issue within this many weeks.
+cooldown_weeks = 4
+
+[dedup]
+# Reports of the same predicted issue at the same store within this window count as one incident.
+window_hours = 72
+
+[brief]
+top_n = 5
+quotes_per_issue = 2
+quote_max_chars = 220
+
+[routing]
+# Escalation SLA in hours by severity (README "Routing and escalation rule").
+sla_hours_critical = 24
+sla_hours_high = 72
+sla_hours_medium = 168
