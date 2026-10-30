@@ -68,6 +68,14 @@ class RoutingSettings:
 
 
 @dataclass(frozen=True)
+class RunnerSettings:
+    evaluator_path: Path
+    detect_timeout_seconds: int
+    build_timeout_seconds: int
+    evaluate_timeout_seconds: int
+
+
+@dataclass(frozen=True)
 class Settings:
     paths: PathSettings
     classifier: ClassifierSettings
@@ -75,6 +83,7 @@ class Settings:
     dedup: DedupSettings
     brief: BriefSettings
     routing: RoutingSettings
+    runner: RunnerSettings
 
 
 def load_settings(path: Path | None = None) -> Settings:
@@ -86,6 +95,8 @@ def load_settings(path: Path | None = None) -> Settings:
     paths = raw["paths"]
     detector = dict(raw["detector"])
     detector["scan_windows"] = tuple(int(w) for w in detector["scan_windows"])
+    runner = dict(raw["runner"])
+    runner["evaluator_path"] = (base / runner["evaluator_path"]).resolve()
     return Settings(
         paths=PathSettings(
             data_dir=(base / paths["data_dir"]).resolve(),
@@ -97,4 +108,5 @@ def load_settings(path: Path | None = None) -> Settings:
         dedup=DedupSettings(**raw["dedup"]),
         brief=BriefSettings(**raw["brief"]),
         routing=RoutingSettings(**raw["routing"]),
+        runner=RunnerSettings(**runner),
     )

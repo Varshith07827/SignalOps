@@ -51,6 +51,14 @@ top_n = 5
 quotes_per_issue = 2
 quote_max_chars = 220
 
+[runner]
+# Dashboard "Run" tab. The organisers' scorer is not part of this repository: point this at your copy
+# of the problem pack's evaluate.py (the scorer button is disabled when the file is missing).
+evaluator_path = "../R5_Voice_of_Store_Engine/evaluate.py"
+detect_timeout_seconds = 600
+build_timeout_seconds = 1200
+evaluate_timeout_seconds = 300
+
 [routing]
 # Escalation SLA in hours by severity (README "Routing and escalation rule").
 sla_hours_critical = 24

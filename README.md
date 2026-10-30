@@ -61,6 +61,16 @@ python FULL_CODE/main.py --cv                 # submission/ files, outputs/, bri
 streamlit run FULL_CODE/app/dashboard.py      # dashboard at http://localhost:8501
 ```
 
+The dashboard has a week-range selector in the sidebar and these tabs:
+
+* **Insights**: what the engine does and how well it works, in plain English, with live numbers and likely
+  jury questions.
+* **Overview, Regional brief, Early warnings, Owner queues, Explorer**: the results for the selected weeks.
+* **Run**: pick a range of weeks and run the weekly detector command for each (it shows the exact commands,
+  and checks every week against the submitted flags file); rebuild everything; or score the submission with
+  the organisers' `evaluate.py` (set `[runner] evaluator_path` in `FULL_CODE/config.toml` to your copy). The
+  commands are fixed argument lists run without a shell; only calendar weeks you pick are passed in.
+
 `main.py` writes:
 
 * `submission/R5_predictions.csv`, `submission/R5_emerging_flags.csv`, `submission/detector_cmd.txt`;
@@ -88,10 +98,11 @@ file, `VOS_LOG_LEVEL` sets log verbosity. No secrets, API keys or network access
 cd FULL_CODE && python -m pytest -q
 ```
 
-39 tests on small synthetic fixtures (no pack data needed): severity floor and actionable rules, store
+45 tests on small synthetic fixtures (no pack data needed): severity floor and actionable rules, store
 attribution, language detection, input validation, detector behaviour (small-store spike flagged, chain-wide
-outage ignored, budget, cooldown, no future data), routing, de-duplication, the brief, the classifier, and an
-end-to-end check that the full build's flags equal the week-by-week detector's flags. Lint: `ruff check .` and
+outage ignored, budget, cooldown, no future data), routing, de-duplication, the brief, the classifier, the
+dashboard's command runner (command shape, week validation, exit codes, timeout), and an end-to-end check that
+the full build's flags equal the week-by-week detector's flags. Lint: `ruff check .` and
 `ruff format .` (configured in `pyproject.toml`).
 
 ## Architecture
@@ -101,7 +112,8 @@ FULL_CODE/
 ├── main.py            entry point: full build (submission + outputs + briefs [+ CV])
 ├── detect.py          entry point: one week's flags (the jury re-run command)
 ├── config.toml        every threshold, window, weight and SLA
-├── app/dashboard.py   Streamlit UI (presentation only; reads outputs/)
+├── app/dashboard.py   Streamlit UI entry point (presentation only)
+├── app/views/         insights, analysis tabs, Run tab
 ├── src/voice_of_store/
 │   ├── data_io.py     load + validate the five CSVs from one folder; Monday-week assignment
 │   ├── text.py        normalisation, store-from-locality attribution, language detection
@@ -113,6 +125,7 @@ FULL_CODE/
 │   ├── brief.py       regional top-5 brief, trend arrows, evidence quotes, Markdown rendering
 │   ├── evaluation.py  stratified 5-fold CV and precision statement
 │   ├── pipeline.py    orchestration, causal weekly replay
+│   ├── commands.py    builds and runs the project's commands for the Run tab (no shell, timeouts)
 │   └── reports.py     writes submission, dashboard tables, briefs
 └── tests/
 ```
