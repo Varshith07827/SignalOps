@@ -73,6 +73,20 @@ Without uv: `pip install numpy pandas scikit-learn scipy fastapi uvicorn python-
 
 **Data:** copy the pack's `data/*.csv` files into `FULL_CODE/data/` (git-ignored, never committed).
 
+**Cleaning new or hand-edited data (optional).** The engine rejects bad input outright. To repair a raw copy
+first, keep it in its own folder and let the cleaner write the cleaned files into `FULL_CODE/data/`:
+
+```bash
+python FULL_CODE/clean.py --in path/to/raw_data --out FULL_CODE/data
+```
+
+It tidies whitespace, casing, channel aliases (`call center` → `call_centre_ticket`), date formats (day-first
+dates, time zones → IST), ratings (`4/5` → `4`) and ids (`it1` → `IT01`, ` st-abcde` → `ST-ABCDE`). It drops
+duplicate rows and rows it cannot repair, and blanks store ids that are not in `store_master.csv`. Feedback text
+keeps its typos, emojis and languages, and feedback ids keep their exact spelling. Every change is counted in
+`cleaning_report.json`, and the result is checked with the engine's own validator (exit code 0 means it loads).
+Clean data passes through unchanged.
+
 ```bash
 python FULL_CODE/main.py --cv     # writes submission/, FULL_CODE/outputs/ (records, briefs, CV report)
 ```
@@ -175,7 +189,7 @@ flowchart LR
 
 | Part | Job |
 |---|---|
-| `main.py`, `detect.py`, `serve.py` | Entry points: full build, one week's flags, dashboard |
+| `main.py`, `detect.py`, `serve.py`, `clean.py` | Entry points: full build, one week's flags, dashboard, data cleaning |
 | `config.toml` | All settings |
 | `api/` | `server.py` (app, security headers, request-forgery check), `deps.py` (sign-in and permission checks), `routes_*.py` (auth, dashboard, cases, admin) |
 | `web/` | The app: `index.html`, `styles.css`, `js/` (one module per screen), plain JavaScript, no build step |
