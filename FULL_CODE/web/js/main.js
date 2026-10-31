@@ -94,6 +94,7 @@ function buildPickers() {
 }
 
 async function renderRoute() {
+  if (!ctx.user || !ctx.status) return; // signed out, or still loading
   const { name, params } = parseHash();
   if (!allowed(name)) {
     go(home());
@@ -177,8 +178,10 @@ async function signedIn(user) {
   buildPickers();
   $("splash").hidden = true;
   $("app").hidden = false;
-  if (!location.hash) location.hash = `#/${home()}`;
-  await renderRoute();
+  const wanted = parseHash().name;
+  // A page from the previous account (or none) goes home; changing the hash renders it once.
+  if (!location.hash || !allowed(wanted)) location.hash = `#/${home()}`;
+  else await renderRoute();
   refreshInbox();
   clearInterval(inboxTimer);
   inboxTimer = setInterval(refreshInbox, INBOX_POLL_MS);
@@ -223,8 +226,12 @@ async function login(event) {
 
 async function logout() {
   await api("/api/logout", { method: "POST" }).catch(() => {});
-  location.hash = "";
-  update({ user: null });
+  // Forget the user before touching the address, so no page renders for them on the way out.
+  current.cleanup?.();
+  current = { name: null, cleanup: null };
+  $("view").replaceChildren();
+  update({ user: null, status: null });
+  history.replaceState(null, "", location.pathname);
   showLogin();
 }
 
