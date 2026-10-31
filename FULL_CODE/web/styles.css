@@ -434,6 +434,8 @@ textarea { resize: vertical; line-height: 1.5; }
   border-radius: var(--r-m);
   border: 1px solid var(--line);
   overflow: hidden;
+  /* Leaflet stacks its layers up to z-index 1000; keep them inside the board, under the side panel. */
+  isolation: isolate;
   background:
     radial-gradient(ellipse at 50% 42%, transparent 35%, var(--surface-2) 100%),
     radial-gradient(circle, color-mix(in srgb, var(--ink-3) 22%, transparent) 1px, transparent 1.2px) 0 0 / 22px 22px,
