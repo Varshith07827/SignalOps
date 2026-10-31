@@ -1,14 +1,14 @@
 """Upload parsing, plain-English summaries and the dashboard API on the toy pack."""
 
 import time
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
 from api.server import create_app
-from toy_pack import MONDAYS, write_pack
+from toy_pack import HEADERS, MONDAYS, add_accounts, sign_in, write_pack
 from voice_of_store.insights import (
     case_list,
     early_warnings,
@@ -138,13 +138,16 @@ def test_store_map_shows_this_weeks_problems_and_the_last_one_solved(taxonomy, s
     analysis = Analysis("test", records, flags, [WEEK], ["West"])
     shops = stores.assign(city="Pune", format="Saffron Market")
     locations = pd.DataFrame({"store_id": ["ST-AAAAA", "ST-BBBBB"], "lat": [18.5, 19.1], "lon": [73.8, 73.0]})
-    kothrud, vashi = store_map(analysis, WEEK, taxonomy, shops, locations, quiet_weeks=2)
+    kothrud, vashi, mg_road = store_map(analysis, WEEK, taxonomy, shops, locations, quiet_weeks=2)
     assert kothrud["cases"] == 1 and kothrud["urgent"] == 1 and kothrud["worst"] == "critical"
-    assert kothrud["problems"] == [{"issue_type_id": "IT10", "problem": "Issue 10", "severity": "critical", "cases": 1}]
+    problem = {"issue_type_id": "IT10", "problem": "Issue 10", "short": "Cold-chain failure", "severity": "critical"}
+    assert kothrud["problems"] == [{**problem, "cases": 1}]
     assert kothrud["warnings"] == ["Issue 10"]
     # IT01 was reported last week, so only IT04 has been quiet for two weeks. Later weeks are never used.
     assert kothrud["last_solved"] == {"problem": "Issue 4", "last_report": "2025-12-16", "reports": 1}
     assert vashi["cases"] == 0 and vashi["worst"] is None and vashi["last_solved"] is None
+    # A store with no location on file stays on the board; only the map leaves it out.
+    assert mg_road["store_id"] == "ST-CCCCC" and mg_road["lat"] is None
 
 
 def test_store_locations_are_in_india_and_unique():
@@ -153,19 +156,34 @@ def test_store_locations_are_in_india_and_unique():
     assert locations["lat"].between(6, 36).all() and locations["lon"].between(68, 98).all()
 
 
+@dataclass
+class Clients:
+    admin: TestClient
+    store: TestClient
+    anonymous: TestClient
+    folder: object
+
+
 @pytest.fixture()
 def client(tmp_path, settings):
+    """The toy pack served by the app, with head office and the Kothrud manager signed in."""
     write_pack(tmp_path)
-    toy = replace(settings, paths=replace(settings.paths, data_dir=tmp_path))
-    with TestClient(create_app(toy)) as test_client:
+    toy = replace(
+        settings,
+        paths=replace(settings.paths, data_dir=tmp_path),
+        database=replace(settings.database, path=tmp_path / "app.db"),
+    )
+    add_accounts(toy.database.path)
+    app = create_app(toy)
+    with TestClient(app) as admin:
         deadline = time.monotonic() + 60
-        while test_client.get("/api/status").json()["status"] == "loading" and time.monotonic() < deadline:
+        while app.state.vos.status == "loading" and time.monotonic() < deadline:
             time.sleep(0.2)
-        yield test_client, tmp_path
+        yield Clients(sign_in(admin, "head-office"), sign_in(TestClient(app), "kothrud"), TestClient(app), tmp_path)
 
 
 def test_dashboard_api_serves_every_section(client):
-    api, _ = client
+    api = client.admin
     status = api.get("/api/status").json()
     assert status["status"] == "ready" and status["regions"] == ["West"]
     spike_week = f"{MONDAYS[8]:%Y-%m-%d}"
@@ -186,7 +204,7 @@ def test_dashboard_api_serves_every_section(client):
 
 
 def test_dashboard_api_rejects_bad_input(client):
-    api, _ = client
+    api = client.admin
     assert api.get("/api/week?week=1999-01-01").status_code == 400
     assert api.get(f"/api/week?week={MONDAYS[0]:%Y-%m-%d}&region=Mars").status_code == 400
     assert api.get(f"/api/top-issues?region=Mars&week={MONDAYS[0]:%Y-%m-%d}").status_code == 400
@@ -200,7 +218,7 @@ def test_dashboard_api_rejects_bad_input(client):
 
 
 def test_upload_replaces_the_data_and_the_dataset_can_be_restored(client):
-    api, folder = client
+    api, folder = client.admin, client.folder
     feedback = pd.read_csv(folder / "feedback.csv")
     first_weeks = feedback[pd.to_datetime(feedback["created_at"]) < MONDAYS[3]]
     uploaded = api.post("/api/upload", files={"file": ("first.csv", first_weeks.to_csv(index=False), "text/csv")})
@@ -212,7 +230,7 @@ def test_upload_replaces_the_data_and_the_dataset_can_be_restored(client):
 
 
 def test_page_is_served_with_security_headers(client):
-    api, _ = client
+    api = client.admin
     page = api.get("/")
     assert page.status_code == 200 and "Voice of Store" in page.text
     assert "default-src 'self'" in page.headers["content-security-policy"]
@@ -233,7 +251,7 @@ def test_review_result_explains_each_outcome(taxonomy, stores, settings):
 
 
 def test_new_review_is_labelled_and_routed(client):
-    api, _ = client
+    api = client.admin
     stores = api.get("/api/stores").json()
     assert {s["store_id"] for s in stores} == {"ST-AAAAA", "ST-BBBBB", "ST-CCCCC"}
     review = {"text": "freezer not cold, ice cream melted", "channel": "staff_shift_note", "store_id": "ST-BBBBB"}
@@ -243,10 +261,90 @@ def test_new_review_is_labelled_and_routed(client):
 
 
 def test_new_review_input_is_checked(client):
-    api, _ = client
+    api = client.admin
     good = {"text": "freezer not cold", "channel": "in_app"}
     assert api.post("/api/review", json={**good, "store_id": "ST-NOPE"}).status_code == 400
     assert api.post("/api/review", json={**good, "rating": 9}).status_code == 422
     assert api.post("/api/review", json={**good, "channel": "fax"}).status_code == 422
     assert api.post("/api/review", json={**good, "text": "  "}).status_code == 422
     assert api.post("/api/review", json={**good, "text": "    ok    "}).status_code == 400
+
+
+def test_sign_in_is_required_and_changes_need_the_app_header(client):
+    guest = client.anonymous
+    assert guest.get("/api/me").json() is None
+    assert guest.get("/api/status").status_code == 401
+    assert guest.post("/api/login", json={"username": "head-office", "password": "admin-pass-1"}).status_code == 403
+    wrong = guest.post("/api/login", json={"username": "head-office", "password": "nope"}, headers=HEADERS)
+    assert wrong.status_code == 401 and wrong.json()["detail"] == "Wrong username or password."
+    me = client.store.get("/api/me").json()
+    assert me["role"] == "store" and me["store"]["name"] == "Saffron Hyper Kothrud"
+    assert client.store.post("/api/logout").status_code == 200
+    assert client.store.get("/api/status").status_code == 401
+
+
+def test_login_locks_after_repeated_wrong_passwords(client):
+    guest = client.anonymous
+    for _ in range(5):
+        guest.post("/api/login", json={"username": "vashi", "password": "wrong-pass"}, headers=HEADERS)
+    locked = guest.post("/api/login", json={"username": "vashi", "password": "store-pass-2"}, headers=HEADERS)
+    assert locked.status_code == 429
+
+
+def test_store_manager_sees_only_their_own_store(client):
+    store = client.store
+    week = f"week={MONDAYS[8]:%Y-%m-%d}"
+    for path in ("/api/week?", "/api/map?", "/api/reputation?", "/api/top-issues?region=West&", "/api/stores?"):
+        assert store.get(path + week).status_code == 403, path
+    assert store.get("/api/warnings").status_code == 403
+    assert store.get(f"/api/stores/ST-BBBBB/overview?{week}").status_code == 403
+    own = store.get(f"/api/stores/ST-AAAAA/overview?{week}").json()
+    assert own["store"]["name"] == "Saffron Hyper Kothrud" and own["reputation"]["of"] == 3
+    asked_for_vashi = store.get(f"/api/cases?{week}&store=ST-BBBBB").json()["cases"]
+    assert asked_for_vashi and {c["store_id"] for c in asked_for_vashi} == {"ST-AAAAA"}
+    other_case = client.admin.get(f"/api/cases?{week}&store=ST-BBBBB").json()["cases"][0]["ref"]
+    assert store.get(f"/api/cases/{other_case}").status_code == 403
+    assert store.post("/api/review", json={"text": "freezer warm", "channel": "in_app"}).status_code == 403
+
+
+def test_store_report_is_solved_by_head_office_and_confirmed_by_the_store(client):
+    admin, store = client.admin, client.store
+    report = store.post("/api/reports", json={"text": "freezer not cold, ice cream melted"}).json()
+    assert report["raised"] and report["case"]["issue_type_id"] == "IT10" and report["case"]["status"] == "open"
+    ref = report["case"]["ref"]
+    assert admin.post("/api/reports", json={"text": "freezer not cold"}).status_code == 403
+    assert admin.get("/api/inbox").json()["unread"] == 1
+    assert store.post(f"/api/cases/{ref}/resolve", json={"note": "fixed"}).status_code == 403
+    assert admin.post(f"/api/cases/{ref}/start", json={}).json()["status"] == "in_progress"
+    solved = admin.post(f"/api/cases/{ref}/resolve", json={"note": "compressor replaced"}).json()
+    assert solved["status"] == "awaiting_confirmation" and solved["can"]["resolve"] is False
+    ask = store.get("/api/inbox").json()["messages"][0]
+    assert ask["kind"] == "confirm_request" and ask["ref"] == ref
+    assert store.get(f"/api/cases/{ref}").json()["can"]["confirm"] is True
+    closed = store.post(f"/api/cases/{ref}/confirm", json={"fixed": True}).json()
+    assert closed["status"] == "closed" and closed["timeline"][-1]["kind"] == "confirmed"
+    assert admin.get("/api/inbox").json()["messages"][0]["kind"] == "confirmed"
+    assert [r["status"] for r in store.get("/api/reports").json()] == ["closed"]
+    week = f"{MONDAYS[-1]:%Y-%m-%d}"
+    kothrud = next(p for p in admin.get(f"/api/map?week={week}").json() if p["store_id"] == "ST-AAAAA")
+    assert kothrud["last_solved"]["confirmed"] is True
+
+
+def test_praise_is_not_raised_as_a_case(client):
+    answer = client.store.post("/api/reports", json={"text": "great service thank you"}).json()
+    assert answer["raised"] is False and "Praise" in answer["result"]["reason"]
+    assert client.store.get("/api/reports").json() == []
+
+
+def test_feedback_cases_can_be_worked_and_show_their_status(client):
+    admin = client.admin
+    week = f"{MONDAYS[8]:%Y-%m-%d}"
+    first = admin.get(f"/api/cases?week={week}&store=ST-AAAAA").json()["cases"][0]
+    assert first["status"] == "open" and first["source"] == "feedback"
+    detail = admin.get(f"/api/cases/{first['ref']}").json()
+    assert detail["messages"] and detail["timeline"] == []
+    admin.post(f"/api/cases/{first['ref']}/start", json={"note": "checking"})
+    listed = admin.get(f"/api/cases?week={week}&store=ST-AAAAA&status=in_progress").json()["cases"]
+    assert [c["ref"] for c in listed] == [first["ref"]]
+    assert admin.get("/api/cases/FB-NOPE").status_code == 404
+    assert admin.post(f"/api/cases/{first['ref']}/note", json={"note": "  "}).status_code == 400

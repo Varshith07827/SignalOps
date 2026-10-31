@@ -1,6 +1,9 @@
-"""A tiny synthetic problem pack (3 stores, 10 weeks) with one planted freezer spike, for end-to-end tests."""
+"""A tiny synthetic problem pack (3 stores, 10 weeks) with one planted freezer spike, plus demo accounts."""
 
 import pandas as pd
+
+from voice_of_store.accounts import save_user
+from voice_of_store.database import apply_schema, session
 
 MONDAYS = list(pd.date_range("2026-01-05", periods=10, freq="7D"))
 STORES = {
@@ -83,3 +86,23 @@ def write_pack(folder):
             "week_end": [(m + pd.Timedelta(days=6)).date() for m in MONDAYS],
         }
     ).to_csv(folder / "week_calendar.csv", index=False)
+
+
+HEADERS = {"X-Requested-With": "voice-of-store"}
+PASSWORDS = {"head-office": "admin-pass-1", "kothrud": "store-pass-1", "vashi": "store-pass-2"}
+
+
+def add_accounts(database_path):
+    """Head office plus managers for Kothrud (ST-AAAAA) and Vashi (ST-BBBBB)."""
+    apply_schema(database_path)
+    with session(database_path) as connection:
+        save_user(connection, "head-office", "Head office", PASSWORDS["head-office"], "admin")
+        save_user(connection, "kothrud", "Kothrud manager", PASSWORDS["kothrud"], "store", "ST-AAAAA")
+        save_user(connection, "vashi", "Vashi manager", PASSWORDS["vashi"], "store", "ST-BBBBB")
+
+
+def sign_in(client, username):
+    response = client.post("/api/login", json={"username": username, "password": PASSWORDS[username]}, headers=HEADERS)
+    assert response.status_code == 200, response.text
+    client.headers.update(HEADERS)
+    return client

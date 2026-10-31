@@ -34,9 +34,15 @@ The data has 39,769 messages over 26 weeks, with labels for 3,000 messages from 
 4. **De-duplicates** the same incident reported through several channels (stretch goal).
 5. **Writes a one-page brief per region per week**: top 5 issues, owner, severity, quotes, stores, trend arrow.
 
-**Users:** regional managers and team heads. They use the dashboard: the week's numbers, the region's top 5
-issues, early warnings, each team's case list with deadlines, a map of all stores, a form to check a new
-review, and buttons to run `evaluate.py` and the accuracy check.
+**Users** sign in to the web app with one of two roles:
+
+* **Head office** sees every store: the week's numbers, a store board (one bubble per store, sized by cases
+  and showing its biggest problem; or a map), stores doing well, early warnings, the regional brief, every
+  case with filters, and the model's score. It works each case through to a fix.
+* **Store managers** (three demo stores) see only their own store: what to do this week with deadlines,
+  early warnings, reputation and the last problem solved. They report problems from staff notes; the model
+  labels and routes them to head office. When head office marks a problem solved, the store is asked to
+  confirm it is fixed; "no" reopens it.
 
 ### Results
 
@@ -69,7 +75,14 @@ Without uv: `pip install numpy pandas scikit-learn scipy fastapi uvicorn python-
 
 ```bash
 python FULL_CODE/main.py --cv     # writes submission/, FULL_CODE/outputs/ (records, briefs, CV report)
-python FULL_CODE/serve.py         # dashboard at http://127.0.0.1:8000 (add --port 8001 if 8000 is busy)
+```
+
+**Web app.** Copy `FULL_CODE/.env.example` to `FULL_CODE/.env` and set the two demo passwords, then create
+the accounts (head-office, rs-puram, dharampeth, kankarbagh) and start the server:
+
+```bash
+python FULL_CODE/db/seed.py       # creates FULL_CODE/instance/voice_of_store.db (git-ignored)
+python FULL_CODE/serve.py         # http://127.0.0.1:8000 (add --port 8001 if 8000 is busy)
 ```
 
 Detector for one week (the command in `submission/detector_cmd.txt`), run from the project root:
@@ -88,8 +101,8 @@ python R5_Voice_of_Store_Engine/evaluate.py --submission submission/R5_predictio
 ```
 
 **Settings:** every threshold, window, weight and deadline is in `FULL_CODE/config.toml`.
-**Environment variables** (optional, see `FULL_CODE/.env.example`): `VOS_CONFIG` (another settings file) and
-`VOS_LOG_LEVEL`. No secrets or API keys are needed.
+**Environment variables** (see `FULL_CODE/.env.example`): `VOS_ADMIN_PASSWORD` and `VOS_STORE_PASSWORD` for
+the demo accounts; optional `VOS_CONFIG` (another settings file) and `VOS_LOG_LEVEL`. No API keys are needed.
 
 ## How to run the tests
 
@@ -97,7 +110,8 @@ python R5_Voice_of_Store_Engine/evaluate.py --submission submission/R5_predictio
 cd FULL_CODE && python -m pytest -q
 ```
 
-64 tests on small synthetic data (the pack is not needed). Lint and format: `ruff check .` and `ruff format .`.
+84 tests on small synthetic data (the pack is not needed), covering the model rules, detector, case workflow,
+sign-in and who can see what. Lint and format: `ruff check .` and `ruff format .`.
 
 ## Architecture
 
@@ -117,19 +131,35 @@ flowchart LR
     brief --> out[("outputs/<br/>briefs, records.csv")]
 ```
 
-The three entry points share the same core. The web layer holds no analysis logic.
+The three entry points share the same core. The web layer holds no analysis logic; every permission check
+is on the server.
 
 ```mermaid
 flowchart TB
     main["main.py<br/>full build"] --> pipe["pipeline.py"]
     detect["detect.py<br/>one week, causal"] --> pipe
-    web["web/<br/>index.html, app.js, map.js"] -- JSON --> api["api/server.py<br/>FastAPI routes + input checks"]
+    web["web/<br/>sign-in, screens per role"] -- JSON --> api["api/<br/>routes, sign-in, permissions"]
     serve["serve.py"] --> api
-    api --> svc["service.py + insights.py<br/>dashboard views"]
+    api --> svc["service · insights · reputation<br/>dashboard views"]
+    api --> work["accounts · casework<br/>sign-in, case workflow, inbox"]
     api --> scoring["scoring.py<br/>runs evaluate.py"]
+    work --> db[("SQLite<br/>db/schema.sql")]
     svc --> pipe
     pipe --> core["data_io · text · classifier · policy<br/>routing · dedup · detector · brief"]
     config["config.toml"] -.-> core
+```
+
+A case from report to confirmed fix:
+
+```mermaid
+flowchart LR
+    r["Store reports a problem<br/>(or head office opens a case<br/>found in the feedback)"] --> o["Open"]
+    o --> p["In progress"]
+    p --> w["Waiting for store<br/>(store asked: is it fixed?)"]
+    o --> w
+    w -- yes --> c["Closed"]
+    w -- no --> re["Reopened"]
+    re --> p
 ```
 
 How one week's flags are made, by `detect.py` and, week by week, by `main.py`:
@@ -147,9 +177,10 @@ flowchart LR
 |---|---|
 | `main.py`, `detect.py`, `serve.py` | Entry points: full build, one week's flags, dashboard |
 | `config.toml` | All settings |
-| `api/server.py` | FastAPI routes, input checks, security headers |
-| `web/` | Dashboard page: plain HTML, CSS and JavaScript, no build step |
-| `src/voice_of_store/` | Core logic, one module per job (see the first diagram) plus `service`, `insights`, `scoring`, `evaluation` (cross-validation), `reports` (writes files) and `store_locations.csv` (map) |
+| `api/` | `server.py` (app, security headers, request-forgery check), `deps.py` (sign-in and permission checks), `routes_*.py` (auth, dashboard, cases, admin) |
+| `web/` | The app: `index.html`, `styles.css`, `js/` (one module per screen), plain JavaScript, no build step |
+| `db/` | `schema.sql` (accounts, sessions, cases, events, inbox) and `seed.py` (demo accounts) |
+| `src/voice_of_store/` | Core logic, one module per job (see the first diagram) plus `service`, `insights`, `reputation`, `accounts`, `casework`, `database`, `scoring`, `evaluation` (cross-validation), `reports` (writes files) and `store_locations.csv` (map) |
 | `tests/` | pytest suite |
 
 **Classifier.** TF-IDF over words (1–2 grams) and characters (2–5 grams) copes with typos, emojis and mixed
@@ -205,7 +236,11 @@ the same file. No dates, week numbers or ids are hard-coded.
 * In the first weeks few labels are visible, so 2 early flags fail `evaluate.py`'s own-label check.
 * Severity is the weakest label (F1 0.94); critical and high are confused most often.
 * A store is found in the text only by its exact locality name; misspellings are missed.
-* Map locations are approximate (the dataset gives only the city), the map needs internet, and "last
-  solved" means the complaints stopped, since the data has no record of fixes.
+* Map locations are approximate (the dataset gives only the city) and the map needs internet. Until a store
+  confirms a fix in the app, "last solved" means the complaints stopped.
+* Sign-in is demo grade: local accounts with scrypt-hashed passwords, server-side sessions and a lockout,
+  but no single sign-on, password reset or audit export. Messages are in-app only (no SMS or email).
+* Problems reported in the app are kept apart from the dataset: they never change the submission files or the
+  weekly early warnings.
 * Next steps: detect multi-store product incidents, ask a human to label unsure records, and let teams close
   cases so fixes can be checked.

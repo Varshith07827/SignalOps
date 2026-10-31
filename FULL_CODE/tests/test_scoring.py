@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.server import create_app
-from toy_pack import write_pack
+from toy_pack import add_accounts, sign_in, write_pack
 from voice_of_store.scoring import EvaluationError, EvaluationResult, render_report, run_evaluation, summarise_score
 
 SCORE = {
@@ -64,7 +64,12 @@ def _settings_with_fake_evaluator(settings, folder, fail=False):
     evaluator = folder / "evaluate.py"
     evaluator.write_text(FAKE_EVALUATOR.format(fail="yes" if fail else "no", score=repr(SCORE)), encoding="utf-8")
     paths = replace(settings.paths, data_dir=folder, submission_dir=submission, outputs_dir=folder / "outputs")
-    return replace(settings, paths=paths, evaluation=replace(settings.evaluation, evaluator_path=evaluator))
+    return replace(
+        settings,
+        paths=paths,
+        evaluation=replace(settings.evaluation, evaluator_path=evaluator),
+        database=replace(settings.database, path=folder / "app.db"),
+    )
 
 
 def test_summary_names_problems_and_marks_missed_incidents(taxonomy):
@@ -101,8 +106,11 @@ def test_run_evaluation_names_missing_files(settings, tmp_path):
 
 
 def test_dashboard_runs_the_scorer_and_offers_the_report(settings, tmp_path):
-    app = create_app(_settings_with_fake_evaluator(settings, tmp_path))
+    scored = _settings_with_fake_evaluator(settings, tmp_path)
+    add_accounts(scored.database.path)
+    app = create_app(scored)
     with TestClient(app) as api:
+        sign_in(api, "head-office")
         deadline = time.monotonic() + 60
         while api.get("/api/status").json()["status"] == "loading" and time.monotonic() < deadline:
             time.sleep(0.2)

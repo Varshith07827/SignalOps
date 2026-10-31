@@ -8,6 +8,11 @@ R5_Voice_of_Store_Engine/
 *.pdf
 score.json
 
+# App database (accounts, sessions, cases): created locally by db/seed.py
+FULL_CODE/instance/
+*.db
+*.sqlite3
+
 # Secrets
 .env
 .env.*

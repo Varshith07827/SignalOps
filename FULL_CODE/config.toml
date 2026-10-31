@@ -69,3 +69,22 @@ max_upload_mb = 50
 sla_hours_critical = 24
 sla_hours_high = 72
 sla_hours_medium = 168
+
+[database]
+# Accounts, sessions, case status and the in-app inbox. The feedback itself stays in the CSV files.
+# Created by db/seed.py; git-ignored.
+path = "instance/voice_of_store.db"
+
+[auth]
+session_hours = 12
+# Lock an account for a while after this many wrong passwords in a row.
+max_failed_logins = 5
+lockout_minutes = 15
+# Set to true when the app is served over HTTPS so the browser only sends the session cookie securely.
+secure_cookies = false
+
+[reputation]
+# "Stores doing well" on the overview: how many to show, and the fewest star ratings a store needs that week
+# for its average rating to count.
+top_n = 5
+min_ratings = 3

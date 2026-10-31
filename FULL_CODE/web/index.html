@@ -12,170 +12,98 @@
   <link rel="stylesheet" href="styles.css">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
-  <script src="map.js" defer></script>
-  <script src="app.js" defer></script>
+  <script type="module" src="js/main.js"></script>
 </head>
 <body>
-  <header class="bar">
-    <div class="brand">
-      <span class="mark" aria-hidden="true"></span>
-      <span class="brand-name">Saffron Retail</span>
-      <span class="product">Voice of Store</span>
-    </div>
-    <form id="upload-form" class="data">
-      <span id="dataset" class="dataset">Loading the R5 dataset...</span>
-      <label class="file">
-        <input id="file" type="file" accept=".csv" required>
-        <span id="file-name">Choose a CSV</span>
-      </label>
-      <button type="submit" class="btn primary">Upload</button>
-      <button type="button" id="show-dataset" class="btn quiet" hidden>Back to R5 dataset</button>
-    </form>
-  </header>
+  <div id="splash" class="splash">
+    <span class="mark large" aria-hidden="true"></span>
+    <p class="splash-name">Voice of Store</p>
+    <p id="splash-text" class="splash-text" role="status">Starting…</p>
+    <div class="splash-bar" aria-hidden="true"><span></span></div>
+  </div>
 
-  <p id="notice" class="notice" role="status" hidden></p>
-
-  <main id="content" hidden>
-    <section class="context">
-      <h1 class="headline">
-        <select id="region" aria-label="Region"></select>
-        <span class="joiner">week of</span>
-        <select id="week" aria-label="Week"></select>
-      </h1>
-      <dl class="strip">
-        <div><dt>Messages</dt><dd id="n-messages">-</dd></div>
-        <div><dt>Need action</dt><dd id="n-action">-</dd></div>
-        <div class="is-urgent"><dt>Urgent</dt><dd id="n-urgent">-</dd></div>
-        <div class="is-warning"><dt>Early warnings</dt><dd id="n-warnings">-</dd></div>
-      </dl>
-    </section>
-
-    <div class="layout">
-      <section class="issues-panel" aria-labelledby="top-title">
-        <h2 id="top-title">Top issues to act on</h2>
-        <ol id="top-issues" class="issues"></ol>
-      </section>
-
-      <aside class="rail">
-        <section aria-labelledby="warn-title">
-          <h2 id="warn-title">Early warnings this week</h2>
-          <ul id="warnings-now" class="warnings"></ul>
-          <details class="earlier">
-            <summary id="earlier-summary">Earlier warnings</summary>
-            <ul id="warnings-earlier" class="warnings compact"></ul>
-          </details>
-        </section>
-
-        <section aria-labelledby="teams-title">
-          <h2 id="teams-title">Who must act this week</h2>
-          <p class="hint">Click a team to see its cases, week by week.</p>
-          <ul class="legend" aria-hidden="true">
-            <li><i class="sw critical"></i>Critical</li>
-            <li><i class="sw high"></i>High</li>
-            <li><i class="sw medium"></i>Medium</li>
-            <li><i class="sw low"></i>Low</li>
-          </ul>
-          <ul id="teams" class="teams"></ul>
-        </section>
-
-        <section aria-labelledby="rule-title">
-          <h2 id="rule-title">When to escalate</h2>
-          <ul id="rule" class="rule"></ul>
-        </section>
-      </aside>
-    </div>
-
-    <section class="map-panel" aria-labelledby="map-title">
-      <div class="accuracy-head">
-        <h2 id="map-title">Stores on the map</h2>
-        <ul class="legend" aria-hidden="true">
-          <li><i class="sw critical"></i>Critical</li>
-          <li><i class="sw high"></i>High</li>
-          <li><i class="sw medium"></i>Medium</li>
-          <li><i class="sw low"></i>Low</li>
-          <li><i class="sw ring"></i>Early warning</li>
+  <main id="login" class="login" hidden>
+    <section class="login-story" aria-hidden="true">
+      <div class="brand light">
+        <span class="mark"></span>
+        <span class="brand-name">Saffron Retail</span>
+      </div>
+      <div class="login-pitch">
+        <p class="eyebrow">Voice of Store</p>
+        <h1>Every store's feedback, turned into this week's action list.</h1>
+        <ul class="login-points">
+          <li>Reviews, app comments, staff notes and calls, in four languages, read and routed for you.</li>
+          <li>Early warnings when one store starts slipping, before it shows chain-wide.</li>
+          <li>Head office and stores work each problem through to a confirmed fix.</li>
         </ul>
       </div>
-      <p class="hint">Zoom out to see the five regions, zoom in to see each store. The number is this week's cases.</p>
-      <div class="map-wrap">
-        <div id="map" class="map" role="region" aria-label="Map of Saffron stores"></div>
-        <aside id="store-card" class="store-card" aria-live="polite">
-          <p class="hint">Click a store to see its problems this week and the last one that was solved. Click a problem to see its cases.</p>
-        </aside>
-      </div>
+      <p class="login-foot">60 stores · 5 regions · R5 dataset</p>
     </section>
-
-    <section class="accuracy-panel" aria-labelledby="review-title">
-      <h2 id="review-title">Check a new review</h2>
-      <form id="review-form" class="review-form">
-        <label>Store
-          <select id="review-store"><option value="">No store (online or app)</option></select>
+    <section class="login-panel">
+      <form id="login-form" class="login-form" novalidate>
+        <h2>Sign in</h2>
+        <p class="muted">Head office sees every store. Store managers see their own.</p>
+        <label class="field">
+          <span class="field-label">Username</span>
+          <input id="username" name="username" autocomplete="username" required maxlength="40" spellcheck="false">
         </label>
-        <label>Channel
-          <select id="review-channel">
-            <option value="online_review">Online review</option>
-            <option value="in_app">App comment</option>
-            <option value="staff_shift_note">Staff shift note</option>
-            <option value="call_centre_ticket">Call-centre call</option>
-          </select>
+        <label class="field">
+          <span class="field-label">Password</span>
+          <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="200">
         </label>
-        <label>Rating
-          <select id="review-rating">
-            <option value="">No rating</option>
-            <option value="1">1 star</option>
-            <option value="2">2 stars</option>
-            <option value="3">3 stars</option>
-            <option value="4">4 stars</option>
-            <option value="5">5 stars</option>
-          </select>
-        </label>
-        <label class="wide">Message
-          <textarea id="review-text" rows="3" minlength="3" maxlength="2000" required
-            placeholder="For example: freezer not cold since morning, ice cream melting"></textarea>
-        </label>
-        <button type="submit" id="review-submit" class="btn primary">Check review</button>
-      </form>
-      <div id="review-result" class="review-result" aria-live="polite"></div>
-      <ul id="review-history" class="review-history"></ul>
-    </section>
-
-    <section class="accuracy-panel" aria-labelledby="eval-title">
-      <div class="accuracy-head">
-        <h2 id="eval-title">Official score</h2>
-        <div class="actions">
-          <a id="download-report" class="btn quiet" href="/api/report" download hidden>Download report</a>
-          <button type="button" id="run-evaluate" class="btn primary">Run evaluate.py</button>
+        <p id="login-error" class="form-error" role="alert" hidden></p>
+        <button id="login-submit" type="submit" class="btn primary wide">Sign in</button>
+        <div class="login-accounts">
+          <p class="field-label">Demo accounts</p>
+          <p class="muted">head-office · rs-puram · dharampeth · kankarbagh</p>
+          <p id="login-setup" class="setup-hint" hidden>
+            No accounts yet. Set the passwords in FULL_CODE/.env, then run <code>python FULL_CODE/db/seed.py</code>.
+          </p>
         </div>
-      </div>
-      <div id="evaluation" class="evaluation">
-        <p class="hint">Scores the files in submission/ against the labelled weeks with the organisers' evaluate.py. Takes a few seconds.</p>
-      </div>
-    </section>
-
-    <section class="accuracy-panel" aria-labelledby="acc-title">
-      <div class="accuracy-head">
-        <h2 id="acc-title">How accurate is it</h2>
-        <button type="button" id="check-accuracy" class="btn quiet">Check accuracy</button>
-      </div>
-      <div id="accuracy" class="accuracy">
-        <p class="hint">Tests the model on labelled messages it has never seen. Takes about 15 seconds.</p>
-      </div>
+      </form>
     </section>
   </main>
 
-  <dialog id="cases-dialog" class="drawer" aria-labelledby="drawer-title">
-    <div class="drawer-head">
-      <div>
-        <p id="drawer-scope" class="eyebrow"></p>
-        <h2 id="drawer-title">Cases</h2>
+  <div id="app" class="shell" hidden>
+    <nav class="sidebar" aria-label="Main">
+      <div class="brand light">
+        <span class="mark"></span>
+        <span class="brand-text">
+          <span class="brand-name">Saffron Retail</span>
+          <span class="brand-product">Voice of Store</span>
+        </span>
       </div>
-      <button type="button" id="drawer-close" class="btn quiet">Close</button>
+      <div id="nav" class="nav"></div>
+      <div class="user-card">
+        <span id="user-avatar" class="avatar" aria-hidden="true"></span>
+        <span class="user-text">
+          <span id="user-name" class="user-name"></span>
+          <span id="user-role" class="user-role"></span>
+        </span>
+        <button id="logout" type="button" class="btn ghost icon-only on-dark" aria-label="Sign out" title="Sign out">
+          <svg class="icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M10 4H5v16h5"/><path d="M14 8l4 4-4 4"/><path d="M18 12H9"/></svg>
+        </button>
+      </div>
+    </nav>
+    <div id="nav-scrim" class="nav-scrim"></div>
+
+    <div class="main">
+      <header class="topbar">
+        <button id="menu-toggle" type="button" class="btn ghost icon-only menu-toggle" aria-label="Menu">
+          <svg class="icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg>
+        </button>
+        <div class="page-titles">
+          <h1 id="page-title"></h1>
+          <p id="page-sub" class="page-sub"></p>
+        </div>
+        <div id="top-controls" class="top-controls"></div>
+        <button id="bell" type="button" class="bell" aria-label="Inbox">
+          <svg class="icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>
+          <span id="bell-count" class="bell-count" hidden></span>
+        </button>
+      </header>
+      <div id="view" class="view"></div>
     </div>
-    <label class="drawer-week">Week starting
-      <select id="drawer-week"></select>
-    </label>
-    <div id="drawer-filters" class="chips" role="group" aria-label="Show by severity"></div>
-    <ol id="drawer-cases" class="cases"></ol>
-  </dialog>
+  </div>
 </body>
 </html>

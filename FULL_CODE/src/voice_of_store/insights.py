@@ -44,6 +44,39 @@ CHANNEL_TEXT = {
     "call_centre_ticket": "Call centre",
 }
 NO_STORE = "Online or app (no store)"
+# Short names that fit inside a bubble on the store board. Unknown types fall back to the start of their name.
+SHORT_PROBLEM = {
+    "IT01": "Checkout queue",
+    "IT02": "Understaffing",
+    "IT03": "Unhelpful staff",
+    "IT04": "Staff misconduct",
+    "IT05": "Staff welfare",
+    "IT06": "Hygiene lapse",
+    "IT07": "Untidy store",
+    "IT08": "Safety hazard",
+    "IT09": "Roof leak",
+    "IT10": "Cold-chain failure",
+    "IT11": "Equipment breakdown",
+    "IT12": "Carry bags",
+    "IT13": "Parking & timings",
+    "IT14": "Out of stock",
+    "IT15": "Poor fresh produce",
+    "IT16": "Expired product",
+    "IT17": "Contamination",
+    "IT18": "Allergen labelling",
+    "IT19": "Price mismatch",
+    "IT20": "Offer not applied",
+    "IT21": "Own-brand quality",
+    "IT22": "Product not stocked",
+    "IT23": "Late delivery",
+    "IT24": "Wrong items",
+    "IT25": "Damaged delivery",
+    "IT26": "App bug",
+    "IT27": "Payment failure",
+    "IT28": "Refund pending",
+    "IT29": "Loyalty points",
+    "IT30": "Billing error",
+}
 # Rough neighbourhood locations for the stores in store_master.csv, used only by the map.
 LOCATIONS_FILE = Path(__file__).with_name("store_locations.csv")
 
@@ -119,6 +152,7 @@ def region_top_issues(
     items = build_region_brief(analysis.records, analysis.flags, region, week, taxonomy, names, settings)
     return [
         {
+            "issue_type_id": item.issue_type_id,
             "problem": item.issue_type,
             "team": item.owner_function,
             "severity": item.severity,
@@ -148,6 +182,8 @@ def early_warnings(analysis: Analysis, taxonomy: pd.DataFrame, stores: pd.DataFr
         warnings.append(
             {
                 "week": flag.as_of_week_start,
+                "store_id": flag.store_id,
+                "issue_type_id": flag.issue_type_id,
                 "store": str(names.loc[flag.store_id, "store_name"]) if flag.store_id in names.index else flag.store_id,
                 "region": str(names.loc[flag.store_id, "region"]) if flag.store_id in names.index else "",
                 "problem": str(taxonomy.loc[flag.issue_type_id, "issue_type"]),
@@ -176,6 +212,9 @@ def _case(group: pd.DataFrame, taxonomy: pd.DataFrame, names: dict, flagged: set
     store = first["store"] if isinstance(first["store"], str) else None
     opened = first["created_at"]
     return {
+        "ref": str(first["incident_id"]),
+        "store_id": store,
+        "issue_type_id": str(first["issue_type_id"]),
         "problem": str(taxonomy.loc[first["issue_type_id"], "issue_type"]),
         "team": str(first["owner_function"]),
         "severity": severity,
@@ -222,8 +261,38 @@ def case_list(
     return {"cases": cases, "counts": counts}
 
 
+def incident_case(
+    analysis: Analysis, ref: str, taxonomy: pd.DataFrame, stores: pd.DataFrame, quote_chars: int
+) -> dict | None:
+    """One case found in the feedback, with every message that belongs to it (None if there is no such case)."""
+    records = analysis.records
+    group = records[(records["incident_id"] == ref) & (records["actionable"] == 1)].sort_values("created_at")
+    if group.empty:
+        return None
+    week = group["week_start"].iloc[0]
+    week_flags = analysis.flags[analysis.flags["as_of_week_start"] == week_label(week)]
+    flagged = set(zip(week_flags["store_id"], week_flags["issue_type_id"], strict=True))
+    names = dict(zip(stores["store_id"], stores["store_name"], strict=True))
+    case = _case(group, taxonomy, names, flagged, quote_chars)
+    case["week"] = week_label(week)
+    case["messages"] = [
+        {
+            "at": f"{row.created_at:%Y-%m-%dT%H:%M}",
+            "channel": CHANNEL_TEXT.get(row.channel, row.channel),
+            "language": LANGUAGE_TEXT.get(row.language, row.language),
+            "text": str(row.text),
+        }
+        for row in group.itertuples(index=False)
+    ]
+    return case
+
+
 def load_store_locations(path: Path = LOCATIONS_FILE) -> pd.DataFrame:
     return pd.read_csv(path, dtype={"store_id": str})
+
+
+def short_problem(type_id: str, name: str) -> str:
+    return SHORT_PROBLEM.get(type_id) or name.split(" (")[0].split(" / ")[0]
 
 
 def _store_problems(rows: pd.DataFrame, taxonomy: pd.DataFrame) -> list[dict]:
@@ -232,6 +301,7 @@ def _store_problems(rows: pd.DataFrame, taxonomy: pd.DataFrame) -> list[dict]:
         {
             "issue_type_id": type_id,
             "problem": str(taxonomy.loc[type_id, "issue_type"]),
+            "short": short_problem(type_id, str(taxonomy.loc[type_id, "issue_type"])),
             "severity": _worst(group["severity"]),
             "cases": int(group["incident_id"].nunique()),
         }
@@ -280,7 +350,8 @@ def store_map(
     quiet_since = week - pd.Timedelta(weeks=quiet_weeks)
 
     pins = []
-    for store in stores.merge(locations, on="store_id").itertuples(index=False):
+    # Stores without a location still get a pin (for the store board and store pages); the map skips them.
+    for store in stores.merge(locations, on="store_id", how="left").itertuples(index=False):
         rows = this_week[this_week["store"] == store.store_id]
         warnings = week_flags.loc[week_flags["store_id"] == store.store_id, "issue_type_id"]
         pins.append(
@@ -290,8 +361,8 @@ def store_map(
                 "city": store.city,
                 "region": store.region,
                 "format": store.format,
-                "lat": float(store.lat),
-                "lon": float(store.lon),
+                "lat": None if pd.isna(store.lat) else float(store.lat),
+                "lon": None if pd.isna(store.lon) else float(store.lon),
                 "cases": int(rows["incident_id"].nunique()),
                 "urgent": int(rows.loc[rows["severity"].isin(URGENT), "incident_id"].nunique()),
                 "worst": _worst(rows["severity"]) if len(rows) else None,

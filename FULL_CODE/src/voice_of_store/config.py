@@ -82,6 +82,25 @@ class ServerSettings:
 
 
 @dataclass(frozen=True)
+class DatabaseSettings:
+    path: Path
+
+
+@dataclass(frozen=True)
+class AuthSettings:
+    session_hours: int
+    max_failed_logins: int
+    lockout_minutes: int
+    secure_cookies: bool
+
+
+@dataclass(frozen=True)
+class ReputationSettings:
+    top_n: int
+    min_ratings: int
+
+
+@dataclass(frozen=True)
 class Settings:
     paths: PathSettings
     classifier: ClassifierSettings
@@ -91,6 +110,9 @@ class Settings:
     routing: RoutingSettings
     evaluation: EvaluationSettings
     server: ServerSettings
+    database: DatabaseSettings
+    auth: AuthSettings
+    reputation: ReputationSettings
 
 
 def load_settings(path: Path | None = None) -> Settings:
@@ -117,4 +139,19 @@ def load_settings(path: Path | None = None) -> Settings:
         routing=RoutingSettings(**raw["routing"]),
         evaluation=EvaluationSettings(**evaluation),
         server=ServerSettings(**raw["server"]),
+        database=DatabaseSettings(path=(base / raw["database"]["path"]).resolve()),
+        auth=AuthSettings(**raw["auth"]),
+        reputation=ReputationSettings(**raw["reputation"]),
     )
+
+
+def load_env_file(path: Path = FULL_CODE_DIR / ".env") -> None:
+    """Read KEY=VALUE lines from FULL_CODE/.env into the environment. Variables already set win."""
+    if not path.is_file():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip("\"'"))

@@ -17,11 +17,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from api.server import create_app  # noqa: E402
 from voice_of_store.cli import configure_logging  # noqa: E402
-from voice_of_store.config import load_settings  # noqa: E402
+from voice_of_store.config import load_env_file, load_settings  # noqa: E402
 
 
 def main() -> None:
     configure_logging()
+    load_env_file()
     settings = load_settings()
     parser = argparse.ArgumentParser(description="Start the Voice-of-Store dashboard.")
     parser.add_argument("--port", type=int, default=settings.server.port, help="port to listen on")
